@@ -1,0 +1,202 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "badgeNumber": "B-001",
+    "status": "ENDED",
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440101",
+        "category": "Dining",
+        "item": "Dining Table",
+        "model": "DT-6S-2024",
+        "size": "L180 × W90 cm",
+        "transferPrice": 45000,
+        "adminCostValue": 4500, "adminCostPct": 10,
+        "spValue": 2250,        "spPct": 5,
+        "transportValue": 1350, "transportPct": 3,
+        "totalCost": 53100,
+        "pricePct": 15,
+        "price": 61065,
+        "m6": "10177.50", "m12": "5088.75", "m18": "3392.50", "m24": "2544.38"
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440102",
+        "category": "Dining",
+        "item": "Dining Chair",
+        "model": "DC-WD-2024",
+        "size": "W45 × D50 cm",
+        "transferPrice": 28000,
+        "adminCostValue": 2800, "adminCostPct": 10,
+        "spValue": 1400,        "spPct": 5,
+        "transportValue": 840,  "transportPct": 3,
+        "totalCost": 33040,
+        "pricePct": 15,
+        "price": 37996,
+        "m6": "6332.67", "m12": "3166.33", "m18": "2110.89", "m24": "1583.17"
+      }
+    ]
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "badgeNumber": "B-002",
+    "status": "APPROVED",
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440201",
+        "category": "Bedroom",
+        "item": "King Bed",
+        "model": "KB-TK-2024",
+        "size": "L210 × W180 cm",
+        "transferPrice": 65000,
+        "adminCostValue": 6500, "adminCostPct": 10,
+        "spValue": 3250,        "spPct": 5,
+        "transportValue": 1950, "transportPct": 3,
+        "totalCost": 76700,
+        "pricePct": 12,
+        "price": 85904,
+        "m6": "14317.33", "m12": "7158.67", "m18": "4772.44", "m24": "3579.33"
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440202",
+        "category": "Bedroom",
+        "item": "Wardrobe",
+        "model": "WR-3D-2024",
+        "size": "W180 × H220 cm",
+        "transferPrice": 38000,
+        "adminCostValue": 3800, "adminCostPct": 10,
+        "spValue": 1900,        "spPct": 5,
+        "transportValue": 1140, "transportPct": 3,
+        "totalCost": 44840,
+        "pricePct": 12,
+        "price": 50220.8,
+        "m6": "8370.13", "m12": "4185.07", "m18": "2790.04", "m24": "2092.53"
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440203",
+        "category": "Bedroom",
+        "item": "Bedside Table",
+        "model": "BT-PR-2024",
+        "size": "W50 × D40 cm",
+        "transferPrice": 12000,
+        "adminCostValue": 1200, "adminCostPct": 10,
+        "spValue": 600,         "spPct": 5,
+        "transportValue": 360,  "transportPct": 3,
+        "totalCost": 14160,
+        "pricePct": 12,
+        "price": 15859.2,
+        "m6": "2643.20", "m12": "1321.60", "m18": "881.07", "m24": "660.80"
+      }
+    ]
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "badgeNumber": "B-003",
+    "status": "PENDING",
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440301",
+        "category": "Living Room",
+        "item": "3-Seater Sofa",
+        "model": "SF-3S-2024",
+        "size": "L210 × D90 cm",
+        "transferPrice": 52000,
+        "adminCostValue": 5200, "adminCostPct": 10,
+        "spValue": 2600,        "spPct": 5,
+        "transportValue": 1560, "transportPct": 3,
+        "totalCost": 61360,
+        "pricePct": 18,
+        "price": 72404.8,
+        "m6": "", "m12": "", "m18": "", "m24": ""
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440302",
+        "category": "Living Room",
+        "item": "Coffee Table",
+        "model": "CT-RD-2024",
+        "size": "L120 × W60 cm",
+        "transferPrice": 18000,
+        "adminCostValue": 1800, "adminCostPct": 10,
+        "spValue": 900,         "spPct": 5,
+        "transportValue": 540,  "transportPct": 3,
+        "totalCost": 21240,
+        "pricePct": 18,
+        "price": 25063.2,
+        "m6": "", "m12": "", "m18": "", "m24": ""
+      }
+    ]
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "badgeNumber": "B-004",
+    "status": "APPROVED",
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440401",
+        "category": "Office",
+        "item": "Executive Desk",
+        "model": "ED-EX-2024",
+        "size": "L160 × W80 cm",
+        "transferPrice": 35000,
+        "adminCostValue": 3500, "adminCostPct": 10,
+        "spValue": 1750,        "spPct": 5,
+        "transportValue": 1050, "transportPct": 3,
+        "totalCost": 41300,
+        "pricePct": 20,
+        "price": 49560,
+        "m6": "8260.00", "m12": "4130.00", "m18": "2753.33", "m24": "2065.00"
+      }
+    ]
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440005",
+    "badgeNumber": "B-005",
+    "status": "PENDING",
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440501",
+        "category": "Living Room",
+        "item": "TV Unit",
+        "model": "TV-WD-2024",
+        "size": "L180 × H60 cm",
+        "transferPrice": 22000,
+        "adminCostValue": 2200, "adminCostPct": 10,
+        "spValue": 1100,        "spPct": 5,
+        "transportValue": 660,  "transportPct": 3,
+        "totalCost": 25960,
+        "pricePct": 15,
+        "price": 29854,
+        "m6": "", "m12": "", "m18": "", "m24": ""
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440502",
+        "category": "Storage",
+        "item": "Bookshelf",
+        "model": "BS-5T-2024",
+        "size": "W90 × H180 cm",
+        "transferPrice": 16500,
+        "adminCostValue": 1650, "adminCostPct": 10,
+        "spValue": 825,         "spPct": 5,
+        "transportValue": 495,  "transportPct": 3,
+        "totalCost": 19470,
+        "pricePct": 15,
+        "price": 22390.5,
+        "m6": "", "m12": "", "m18": "", "m24": ""
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440503",
+        "category": "Office",
+        "item": "Study Chair",
+        "model": "SC-ER-2024",
+        "size": "",
+        "transferPrice": 9500,
+        "adminCostValue": 950, "adminCostPct": 10,
+        "spValue": 475,        "spPct": 5,
+        "transportValue": 285, "transportPct": 3,
+        "totalCost": 11210,
+        "pricePct": 15,
+        "price": 12891.5,
+        "m6": "", "m12": "", "m18": "", "m24": ""
+      }
+    ]
+  }
+]

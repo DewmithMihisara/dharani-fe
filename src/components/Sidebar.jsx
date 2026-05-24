@@ -1,9 +1,13 @@
-import { LayoutDashboard, ClipboardList } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { LayoutDashboard, ClipboardList, Package, LogOut } from 'lucide-react'
 import Logo from './Logo'
+import ConfirmDialog from './ConfirmDialog'
 
 const navItems = [
-  { key: 'home', icon: LayoutDashboard, label: 'Home' },
-  { key: 'orders', icon: ClipboardList, label: 'Orders' },
+  { key: 'home',      icon: LayoutDashboard, label: 'Home'      },
+  { key: 'orders',    icon: ClipboardList,   label: 'Orders'    },
+  { key: 'inventory', icon: Package,         label: 'Inventory' },
 ]
 
 function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
@@ -23,8 +27,11 @@ function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
 }
 
 export default function Sidebar({ activeView, onNavigate }) {
+  const navigate = useNavigate()
+  const [showLogout, setShowLogout] = useState(false)
+
   return (
-    <aside className="w-60 min-h-screen bg-[#14213d] flex flex-col px-4 py-6 shrink-0">
+    <aside className="w-60 h-full bg-[#14213d] flex flex-col px-4 py-6 shrink-0">
       <div className="px-2 mb-6">
         <Logo dark size="sm" />
       </div>
@@ -41,6 +48,24 @@ export default function Sidebar({ activeView, onNavigate }) {
           />
         ))}
       </nav>
+
+      <div className="mt-auto">
+        <button
+          onClick={() => setShowLogout(true)}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer text-white/60 hover:text-red-400 hover:bg-red-400/10"
+        >
+          <LogOut size={18} strokeWidth={1.8} />
+          Logout
+        </button>
+      </div>
+
+      {showLogout && (
+        <ConfirmDialog
+          message="Are you sure you want to logout?"
+          onConfirm={() => navigate('/login')}
+          onCancel={() => setShowLogout(false)}
+        />
+      )}
     </aside>
   )
 }
