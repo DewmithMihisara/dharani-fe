@@ -1,14 +1,13 @@
-import './App.css'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
+import AppLayout from './layouts/AppLayout'
 
-function App() {
-
+export default function App() {
   return (
-    <>
-      <h1 class="text-3xl font-bold underline">
-        Hello world!
-      </h1>
-    </>
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/app" element={<AppLayout />} />
+    </Routes>
   )
 }
-
-export default App
