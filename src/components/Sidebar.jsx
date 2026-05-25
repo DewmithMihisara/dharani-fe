@@ -62,7 +62,11 @@ export default function Sidebar({ activeView, onNavigate }) {
       {showLogout && (
         <ConfirmDialog
           message="Are you sure you want to logout?"
-          onConfirm={() => navigate('/login')}
+          onConfirm={() => {
+            localStorage.removeItem('accessToken')
+            localStorage.removeItem('refreshToken')
+            navigate('/login')
+          }}
           onCancel={() => setShowLogout(false)}
         />
       )}
