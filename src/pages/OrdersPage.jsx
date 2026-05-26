@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X } from 'lucide-react'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
 import NewOrderForm from './NewOrderForm'
-import rawOrders from '../data/orders.json'
+import { getAllOrdersPaginated, getOrderById, deleteOrder } from '../api/orderApi'
 
 const STATUS_VARIANT = {
   APPROVAL_PROCESSING: 'approval',
@@ -372,9 +372,9 @@ function OrderDetailModal({ order, onClose, onSave }) {
 
 // ── Action buttons ────────────────────────────────────────────────────────────
 
-function ActionButtons({ order, onView }) {
+function ActionButtons({ order, onView, onEdit, onDelete }) {
   const [dialog, setDialog] = useState(null)
-  const { id: orderId, status } = order
+  const { id: displayId, status } = order
 
   const canEdit      = EDIT_STATUSES.has(status)
   const showPO       = PO_STATUSES.has(status)
@@ -401,14 +401,14 @@ function ActionButtons({ order, onView }) {
           className={canEdit ? iconBtn : disabledBtn}
           title="Edit Order"
           disabled={!canEdit}
-          onClick={() => canEdit && confirm(`Edit order ${orderId}?`, () => {})}
+          onClick={() => canEdit && onEdit(order)}
         >
           <Pencil size={15} />
         </button>
         <button
           className={iconBtn}
           title="Print Singer Finance Form"
-          onClick={() => confirm(`Print Singer Finance form for ${orderId}?`, () => {})}
+          onClick={() => confirm(`Print Singer Finance form for ${displayId}?`, () => {})}
         >
           <Printer size={15} />
         </button>
@@ -416,7 +416,7 @@ function ActionButtons({ order, onView }) {
           className={showPO ? iconBtn : disabledBtn}
           title="Print Purchase Order"
           disabled={!showPO}
-          onClick={() => showPO && confirm(`Print Purchase Order for ${orderId}?`, () => {})}
+          onClick={() => showPO && confirm(`Print Purchase Order for ${displayId}?`, () => {})}
         >
           <ClipboardList size={15} />
         </button>
@@ -424,7 +424,7 @@ function ActionButtons({ order, onView }) {
           className={showDelivery ? iconBtn : disabledBtn}
           title="Print Delivery Order"
           disabled={!showDelivery}
-          onClick={() => showDelivery && confirm(`Print Delivery Order for ${orderId}?`, () => {})}
+          onClick={() => showDelivery && confirm(`Print Delivery Order for ${displayId}?`, () => {})}
         >
           <Truck size={15} />
         </button>
@@ -432,7 +432,7 @@ function ActionButtons({ order, onView }) {
           <button
             className={iconBtnAmber}
             title="Print Partial Invoice"
-            onClick={() => confirm(`Print Partial Invoice for ${orderId}?`, () => {})}
+            onClick={() => confirm(`Print Partial Invoice for ${displayId}?`, () => {})}
           >
             <Receipt size={15} />
           </button>
@@ -440,7 +440,7 @@ function ActionButtons({ order, onView }) {
         <button
           className={deleteBtn}
           title="Delete Order"
-          onClick={() => confirm(`Delete order ${orderId}? This cannot be undone.`, () => {})}
+          onClick={() => confirm(`Delete order ${displayId}? This cannot be undone.`, () => onDelete(order))}
         >
           <Trash2 size={15} />
         </button>
@@ -449,11 +449,55 @@ function ActionButtons({ order, onView }) {
   )
 }
 
+// ── Pagination bar ────────────────────────────────────────────────────────────
+
+function PaginationBar({ offset, limit, total, onLimitChange, onPrev, onNext }) {
+  const from  = total === 0 ? 0 : offset + 1
+  const to    = Math.min(offset + limit, total)
+  const page  = limit > 0 ? Math.floor(offset / limit) + 1 : 1
+  const pages = limit > 0 ? Math.ceil(total / limit) : 1
+
+  return (
+    <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5e5e5] bg-white text-xs text-[#666]">
+      <span>{total > 0 ? `Showing ${from}–${to} of ${total} orders` : 'No orders found'}</span>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[#aaa]">Rows per page:</span>
+          <select
+            value={limit}
+            onChange={e => onLimitChange(Number(e.target.value))}
+            className="px-2 py-1 rounded-md border border-[#e5e5e5] bg-white text-xs text-[#333] focus:outline-none focus:border-[#14213d] cursor-pointer"
+          >
+            {[10, 25, 50].map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onPrev}
+            disabled={offset === 0}
+            className="px-2 py-1 rounded-md border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            ←
+          </button>
+          <span className="text-[#444] font-medium">Page {page} of {pages}</span>
+          <button
+            onClick={onNext}
+            disabled={offset + limit >= total}
+            className="px-2 py-1 rounded-md border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Orders table ──────────────────────────────────────────────────────────────
 
-function OrdersTable({ orders, onView }) {
+function OrdersTable({ orders, onView, onEdit, onDelete }) {
   return (
-    <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
+    <div className="w-full overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-[#14213d] text-white text-left">
@@ -467,7 +511,7 @@ function OrdersTable({ orders, onView }) {
         <tbody>
           {orders.map((order, i) => (
             <tr
-              key={order.id}
+              key={order.orderId ?? order.id}
               className={`border-t border-[#ebebeb] hover:bg-[#f5f5f5] transition-colors duration-100 ${
                 i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
               }`}
@@ -479,7 +523,7 @@ function OrdersTable({ orders, onView }) {
               </td>
               <td className="px-5 py-3.5 text-[#666]">{order.date}</td>
               <td className="px-5 py-3.5">
-                <ActionButtons order={order} onView={onView} />
+                <ActionButtons order={order} onView={onView} onEdit={onEdit} onDelete={onDelete} />
               </td>
             </tr>
           ))}
@@ -493,8 +537,37 @@ function OrdersTable({ orders, onView }) {
 
 export default function OrdersPage() {
   const [view,      setView]      = useState('list')
-  const [orders,    setOrders]    = useState(rawOrders)
+  const [orders,    setOrders]    = useState([])
   const [viewOrder, setViewOrder] = useState(null)
+  const [editOrder, setEditOrder] = useState(null)
+  const [limit,     setLimit]     = useState(10)
+  const [offset,    setOffset]    = useState(0)
+  const [total,     setTotal]     = useState(0)
+
+  useEffect(() => {
+    async function load() {
+      const token = localStorage.getItem('accessToken')
+      const data = await getAllOrdersPaginated({ offset, limit, columnName: null, branchIds: [] }, token)
+      if (data.status === 200) {
+        setOrders(data.data.orders)
+        setTotal(Number(data.data.total))
+      }
+    }
+    load()
+  }, [offset, limit])
+
+  function handleLimitChange(newLimit) {
+    setLimit(newLimit)
+    setOffset(0)
+  }
+
+  function handlePrev() {
+    setOffset(prev => Math.max(0, prev - limit))
+  }
+
+  function handleNext() {
+    setOffset(prev => prev + limit < total ? prev + limit : prev)
+  }
 
   function handleSave({ newStatus, remark, partialAmount }) {
     const today = new Date().toISOString().slice(0, 10)
@@ -502,11 +575,32 @@ export default function OrdersPage() {
     const update = o => ({
       ...o,
       status: newStatus,
-      history: [entry, ...o.history],
+      history: [entry, ...(o.history || [])],
       partialPayment: partialAmount != null ? { amount: partialAmount } : o.partialPayment,
     })
     setOrders(prev => prev.map(o => o.id === viewOrder.id ? update(o) : o))
     setViewOrder(prev => update(prev))
+  }
+
+  async function handleView(order) {
+    const token = localStorage.getItem('accessToken')
+    const data = await getOrderById(order.orderId, token)
+    if (data.status === 200) setViewOrder(data.data.order)
+  }
+
+  async function handleEdit(order) {
+    const token = localStorage.getItem('accessToken')
+    const data = await getOrderById(order.orderId, token)
+    if (data.status === 200) {
+      setEditOrder(data.data.order)
+      setView('edit')
+    }
+  }
+
+  async function handleDelete(order) {
+    const token = localStorage.getItem('accessToken')
+    const data = await deleteOrder(order.orderId, token)
+    if (data.status === 200) setOrders(prev => prev.filter(o => o.orderId !== order.orderId))
   }
 
   return (
@@ -528,8 +622,24 @@ export default function OrdersPage() {
               Add New Order
             </Button>
           </div>
-          <OrdersTable orders={orders} onView={setViewOrder} />
+          <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
+            <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
+            <PaginationBar
+              offset={offset}
+              limit={limit}
+              total={total}
+              onLimitChange={handleLimitChange}
+              onPrev={handlePrev}
+              onNext={handleNext}
+            />
+          </div>
         </>
+      ) : view === 'edit' ? (
+        <NewOrderForm
+          onBack={() => { setEditOrder(null); setView('list') }}
+          initialData={editOrder}
+          orderId={editOrder?.orderId}
+        />
       ) : (
         <NewOrderForm onBack={() => setView('list')} />
       )}

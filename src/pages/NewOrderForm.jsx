@@ -5,6 +5,9 @@ import Textarea from '../components/Textarea'
 import Select from '../components/Select'
 import FormSection from '../components/FormSection'
 import Button from '../components/Button'
+import OrderSavedDialog from '../components/OrderSavedDialog'
+import { apiPost } from '../api/api'
+import { printSingerForm } from '../api/orderApi'
 
 const MOCK_CATALOGUE = {
   'FUR-001':  { item_name: 'Dining Table (6-Seater)', model: 'DT-6S-2024', item_value: 45000 },
@@ -37,6 +40,8 @@ const RELATIONSHIP_OPTIONS = [
 ]
 
 const INITIAL_FORM = {
+  // Project
+  projectId: '',
   // Section 1 – Employment
   companyName: '', employeeId: '', employmentStartDate: '', departmentAndDesignation: '',
   // Section 1 – Personal
@@ -77,6 +82,175 @@ function LKR(n) {
   return `LKR ${Number(n).toLocaleString('en-LK')}`
 }
 
+function apiToFormState(data) {
+  const s = v => (v == null ? '' : String(v))
+  return {
+    projectId: s(data.projectId),
+    companyName: s(data.companyName),
+    employeeId: s(data.employeeId),
+    employmentStartDate: s(data.employmentStartDate),
+    departmentAndDesignation: s(data.departmentAndDesignation),
+    fullName: s(data.fullName),
+    nicNumber: s(data.nicNumber),
+    dateOfBirth: s(data.dateOfBirth),
+    maritalStatus: s(data.maritalStatus),
+    nationality: s(data.nationality),
+    spouseName: s(data.spouseName),
+    spouseContactNumber: s(data.spouseContactNumber),
+    mobileNumber: s(data.mobileNumber),
+    landlineNumber: s(data.landlineNumber),
+    emailAddress: s(data.emailAddress),
+    expectedIncome: s(data.expectedIncome),
+    paymentMethod: s(data.paymentMethod),
+    nearestPostOffice: s(data.nearestPostOffice),
+    mainCity: s(data.mainCity),
+    permanentAddress1: s(data.permanentAddress1),
+    permanentAddress2: s(data.permanentAddress2),
+    permanentAddress3: s(data.permanentAddress3),
+    permanentAddress4: s(data.permanentAddress4),
+    postalAddress1: s(data.postalAddress1),
+    postalAddress2: s(data.postalAddress2),
+    postalAddress3: s(data.postalAddress3),
+    postalAddress4: s(data.postalAddress4),
+    routeDirectionDescription: s(data.routeDirectionDescription),
+    otherNotes: s(data.otherNotes),
+    relativeFullName: s(data.relativeFullName),
+    relativeRelationship: s(data.relativeRelationship),
+    relativeMobileNumber: s(data.relativeMobileNumber),
+    relativeLandlineNumber: s(data.relativeLandlineNumber),
+    relativeAlternativeNumber: s(data.relativeAlternativeNumber),
+    relativePermanentAddress1: s(data.relativePermanentAddress1),
+    relativePermanentAddress2: s(data.relativePermanentAddress2),
+    relativePermanentAddress3: s(data.relativePermanentAddress3),
+    relativePermanentAddress4: s(data.relativePermanentAddress4),
+    g1_employeeId: s(data.g1_employeeId),
+    g1_fullName: s(data.g1_fullName),
+    g1_nicNumber: s(data.g1_nicNumber),
+    g1_mobileNumber: s(data.g1_mobileNumber),
+    g1_landlineNumber: s(data.g1_landlineNumber),
+    g1_nearestPostOffice: s(data.g1_nearestPostOffice),
+    g1_nearestMainCity: s(data.g1_nearestMainCity),
+    g1_permanentAddress1: s(data.g1_permanentAddress1),
+    g1_permanentAddress2: s(data.g1_permanentAddress2),
+    g1_permanentAddress3: s(data.g1_permanentAddress3),
+    g1_permanentAddress4: s(data.g1_permanentAddress4),
+    g1_postalAddress1: s(data.g1_postalAddress1),
+    g1_postalAddress2: s(data.g1_postalAddress2),
+    g1_postalAddress3: s(data.g1_postalAddress3),
+    g1_postalAddress4: s(data.g1_postalAddress4),
+    g2_employeeId: s(data.g2_employeeId),
+    g2_fullName: s(data.g2_fullName),
+    g2_nicNumber: s(data.g2_nicNumber),
+    g2_mobileNumber: s(data.g2_mobileNumber),
+    g2_landlineNumber: s(data.g2_landlineNumber),
+    g2_nearestPostOffice: s(data.g2_nearestPostOffice),
+    g2_nearestMainCity: s(data.g2_nearestMainCity),
+    g2_permanentAddress1: s(data.g2_permanentAddress1),
+    g2_permanentAddress2: s(data.g2_permanentAddress2),
+    g2_permanentAddress3: s(data.g2_permanentAddress3),
+    g2_permanentAddress4: s(data.g2_permanentAddress4),
+    g2_postalAddress1: s(data.g2_postalAddress1),
+    g2_postalAddress2: s(data.g2_postalAddress2),
+    g2_postalAddress3: s(data.g2_postalAddress3),
+    g2_postalAddress4: s(data.g2_postalAddress4),
+  }
+}
+
+function buildPayload(form, items, id = null) {
+  const or = v => v || null
+  return {
+    id: id,
+    projectId: Number(form.projectId),
+    orderDate: new Date().toISOString().split('T')[0],
+
+    employeeId: form.employeeId,
+    companyName: form.companyName,
+    employmentStartDate: form.employmentStartDate,
+    departmentAndDesignation: form.departmentAndDesignation,
+    fullName: form.fullName,
+    nicNumber: form.nicNumber,
+    dateOfBirth: form.dateOfBirth,
+    maritalStatus: form.maritalStatus,
+    nationality: form.nationality,
+    spouseName: or(form.spouseName),
+    spouseContactNumber: or(form.spouseContactNumber),
+    mobileNumber: form.mobileNumber,
+    landlineNumber: or(form.landlineNumber),
+    emailAddress: or(form.emailAddress),
+    expectedIncome: Number(form.expectedIncome),
+    paymentMethod: form.paymentMethod,
+    nearestPostOffice: form.nearestPostOffice,
+    mainCity: form.mainCity,
+    permanentAddress1: form.permanentAddress1,
+    permanentAddress2: or(form.permanentAddress2),
+    permanentAddress3: or(form.permanentAddress3),
+    permanentAddress4: form.permanentAddress4,
+    postalAddress1: form.postalAddress1,
+    postalAddress2: or(form.postalAddress2),
+    postalAddress3: or(form.postalAddress3),
+    postalAddress4: form.postalAddress4,
+    routeDirectionDescription: or(form.routeDirectionDescription),
+    otherNotes: or(form.otherNotes),
+
+    relative: {
+      fullName: form.relativeFullName,
+      relationship: form.relativeRelationship,
+      mobileNumber: form.relativeMobileNumber,
+      landlineNumber: or(form.relativeLandlineNumber),
+      alternativeNumber: or(form.relativeAlternativeNumber),
+      permanentAddress1: form.relativePermanentAddress1,
+      permanentAddress2: or(form.relativePermanentAddress2),
+      permanentAddress3: or(form.relativePermanentAddress3),
+      permanentAddress4: form.relativePermanentAddress4,
+    },
+
+    guarantors: [
+      {
+        guarantorEmployeeId: form.g1_employeeId,
+        fullName: form.g1_fullName,
+        nicNumber: form.g1_nicNumber,
+        mobileNumber: form.g1_mobileNumber,
+        landlineNumber: or(form.g1_landlineNumber),
+        nearestPostOffice: form.g1_nearestPostOffice,
+        nearestMainCity: form.g1_nearestMainCity,
+        permanentAddress1: form.g1_permanentAddress1,
+        permanentAddress2: or(form.g1_permanentAddress2),
+        permanentAddress3: or(form.g1_permanentAddress3),
+        permanentAddress4: form.g1_permanentAddress4,
+        postalAddress1: form.g1_postalAddress1,
+        postalAddress2: or(form.g1_postalAddress2),
+        postalAddress3: or(form.g1_postalAddress3),
+        postalAddress4: form.g1_postalAddress4,
+      },
+      {
+        guarantorEmployeeId: form.g2_employeeId,
+        fullName: form.g2_fullName,
+        nicNumber: form.g2_nicNumber,
+        mobileNumber: form.g2_mobileNumber,
+        landlineNumber: or(form.g2_landlineNumber),
+        nearestPostOffice: form.g2_nearestPostOffice,
+        nearestMainCity: form.g2_nearestMainCity,
+        permanentAddress1: form.g2_permanentAddress1,
+        permanentAddress2: or(form.g2_permanentAddress2),
+        permanentAddress3: or(form.g2_permanentAddress3),
+        permanentAddress4: form.g2_permanentAddress4,
+        postalAddress1: form.g2_postalAddress1,
+        postalAddress2: or(form.g2_postalAddress2),
+        postalAddress3: or(form.g2_postalAddress3),
+        postalAddress4: form.g2_postalAddress4,
+      },
+    ],
+
+    items: items.map(i => ({
+      itemCode: i.code,
+      itemName: i.item_name,
+      model: i.model,
+      itemValue: i.item_value,
+      durationMonths: i.duration_months,
+    })),
+  }
+}
+
 const inputCls = 'w-full px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
 
 function SubGroup({ label, children }) {
@@ -92,7 +266,6 @@ function SectionDivider() {
   return <div className="border-t border-[#f0f0f0]" />
 }
 
-// Renders a 2×2 grid of 4 address inputs. Fields 1 and 4 are required.
 function AddressGroup({ label, baseKey, form, setForm }) {
   const val = n => form[`${baseKey}${n}`] ?? ''
   const onChange = n => e => setForm(prev => ({ ...prev, [`${baseKey}${n}`]: e.target.value }))
@@ -112,7 +285,6 @@ function AddressGroup({ label, baseKey, form, setForm }) {
   )
 }
 
-// ── Items Grid ─────────────────────────────────────────────────────────────
 function ItemsGrid({ items, setItems }) {
   const [searchCode, setSearchCode] = useState('')
   const [searchError, setSearchError] = useState('')
@@ -226,7 +398,6 @@ function ItemsGrid({ items, setItems }) {
   )
 }
 
-// ── Guarantor block (reused for G1 + G2) ──────────────────────────────────
 function GuarantorFields({ prefix, form, setForm }) {
   const f = (key, extra) => field(form, setForm, `${prefix}_${key}`, extra)
   return (
@@ -250,22 +421,59 @@ function GuarantorFields({ prefix, form, setForm }) {
   )
 }
 
-// ── Main form ──────────────────────────────────────────────────────────────
-export default function NewOrderForm({ onBack }) {
-  const [form, setForm] = useState(INITIAL_FORM)
-  const [items, setItems] = useState([])
+export default function NewOrderForm({ onBack, initialData = null, orderId = null }) {
+  const [form, setForm] = useState(initialData ? apiToFormState(initialData) : INITIAL_FORM)
+  const [items, setItems] = useState(
+    initialData?.items
+      ? initialData.items.map(i => ({
+          code: i.code,
+          item_name: i.item_name,
+          model: i.model,
+          item_value: Number(i.item_value),
+          duration_months: i.duration_months,
+        }))
+      : []
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [savedOrder, setSavedOrder] = useState(null)
 
   const f = (key, extra) => field(form, setForm, key, extra)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    console.log({ form, items })
-    alert('Order saved (mock — backend coming in Phase 2)')
-    onBack()
+    if (items.length === 0) { setError('Please add at least one item.'); return }
+    setError('')
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const data = await apiPost('/orders', buildPayload(form, items, orderId), token)
+      if (data.status === 200) {
+        if (orderId) {
+          onBack()
+        } else {
+          setSavedOrder({ orderCode: data.data.orderCode, orderId: data.data.orderId })
+        }
+      } else {
+        setError(data.message || 'Failed to save order. Please try again.')
+      }
+    } catch {
+      setError('Unable to connect to server. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
+
+      {savedOrder && (
+        <OrderSavedDialog
+          orderCode={savedOrder.orderCode}
+          onPrint={() => printSingerForm(savedOrder.orderId, localStorage.getItem('accessToken'))}
+          onClose={onBack}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center gap-2">
@@ -278,7 +486,7 @@ export default function NewOrderForm({ onBack }) {
           Orders
         </button>
         <span className="text-[#ccc] text-sm">/</span>
-        <h1 className="text-xl font-semibold text-[#14213d]">New Order</h1>
+        <h1 className="text-xl font-semibold text-[#14213d]">{orderId ? 'Update Order' : 'New Order'}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -289,10 +497,11 @@ export default function NewOrderForm({ onBack }) {
 
             <SubGroup label="Employment">
               <div className="grid grid-cols-3 gap-4">
-                <Input label="Company / Employer"       {...f('companyName')}              placeholder="e.g. MAS Holdings" className="col-span-2" />
-                <Input label="Employee ID"              {...f('employeeId')}               placeholder="Emp. number" />
+                <Input label="Project ID"               {...f('projectId')}               type="number" placeholder="Project ID" />
+                <Input label="Company / Employer"       {...f('companyName')}             placeholder="e.g. MAS Holdings" className="col-span-2" />
+                <Input label="Employee ID"              {...f('employeeId')}              placeholder="Emp. number" />
                 <Input label="Department & Designation" {...f('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-2" />
-                <Input label="Employment Start Date"    {...f('employmentStartDate')}      type="date" />
+                <Input label="Employment Start Date"    {...f('employmentStartDate')}     type="date" />
               </div>
             </SubGroup>
 
@@ -393,12 +602,17 @@ export default function NewOrderForm({ onBack }) {
 
         {/* ── Actions ── */}
         <div className="bg-white border border-[#d8d8d8] rounded-xl px-6 py-4 flex items-center justify-between">
-          <p className="text-xs text-[#aaa]">
-            All fields marked <span className="text-[#fca311] font-semibold">*</span> are required
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-[#aaa]">
+              All fields marked <span className="text-[#fca311] font-semibold">*</span> are required
+            </p>
+            {error && <p className="text-xs text-red-600">{error}</p>}
+          </div>
           <div className="flex items-center gap-3">
-            <Button type="button" variant="ghost" onClick={onBack}>Cancel</Button>
-            <Button type="submit">Save Order</Button>
+            <Button type="button" variant="ghost" onClick={onBack} disabled={loading}>Cancel</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving…' : 'Save Order'}
+            </Button>
           </div>
         </div>
 
