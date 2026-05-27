@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import Input from '../components/Input'
 import Textarea from '../components/Textarea'
@@ -8,26 +8,13 @@ import Button from '../components/Button'
 import OrderSavedDialog from '../components/OrderSavedDialog'
 import { apiPost } from '../api/api'
 import { printSingerForm } from '../api/orderApi'
-
-const MOCK_CATALOGUE = {
-  'FUR-001':  { item_name: 'Dining Table (6-Seater)', model: 'DT-6S-2024', item_value: 45000 },
-  'FUR-002':  { item_name: 'Dining Table (4-Seater)', model: 'DT-4S-2024', item_value: 32000 },
-  'FUR-003':  { item_name: 'Coffee Table',            model: 'CT-RND-01',  item_value: 18000 },
-  'COUCH-01': { item_name: '3-Seater Sofa',           model: 'SF-3S-LUX',  item_value: 65000 },
-  'COUCH-02': { item_name: 'L-Shape Sofa',            model: 'SF-L-LRG',   item_value: 88000 },
-  'COUCH-03': { item_name: 'Sofa Set (3+1+1)',        model: 'SF-311-STD', item_value: 78000 },
-  'BED-001':  { item_name: 'King Size Bed Frame',     model: 'BF-KNG-01',  item_value: 58000 },
-  'BED-002':  { item_name: 'Double Bed Frame',        model: 'BF-DBL-01',  item_value: 42000 },
-  'WRD-001':  { item_name: 'Wardrobe 3-Door',         model: 'WD-3D-STD',  item_value: 38000 },
-  'WRD-002':  { item_name: 'Wardrobe 4-Door',         model: 'WD-4D-STD',  item_value: 50000 },
-}
+import { getApprovedItems } from '../api/inventoryApi'
 
 const DURATION_OPTIONS = [
+  { value: '6',  label: '6 months'  },
   { value: '12', label: '12 months' },
+  { value: '18', label: '18 months' },
   { value: '24', label: '24 months' },
-  { value: '36', label: '36 months' },
-  { value: '48', label: '48 months' },
-  { value: '60', label: '60 months' },
 ]
 
 const MARITAL_OPTIONS      = [{ value: 'Married', label: 'Married' }, { value: 'Single', label: 'Single' }]
@@ -72,6 +59,33 @@ const INITIAL_FORM = {
   g2_nearestPostOffice: '', g2_nearestMainCity: '',
   g2_permanentAddress1: '', g2_permanentAddress2: '', g2_permanentAddress3: '', g2_permanentAddress4: '',
   g2_postalAddress1: '',    g2_postalAddress2: '',    g2_postalAddress3: '',    g2_postalAddress4: '',
+}
+
+const HAS_DIGIT  = /\d/
+const HAS_LETTER = /[a-zA-Z]/
+const VALID_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validate(form) {
+  const errs = {}
+
+  const nameKeys = ['fullName', 'spouseName', 'relativeFullName', 'g1_fullName', 'g2_fullName']
+  nameKeys.forEach(k => { if (form[k] && HAS_DIGIT.test(form[k])) errs[k] = 'Name cannot contain numbers' })
+
+  const phoneKeys = [
+    'mobileNumber', 'landlineNumber', 'spouseContactNumber',
+    'relativeMobileNumber', 'relativeLandlineNumber', 'relativeAlternativeNumber',
+    'g1_mobileNumber', 'g1_landlineNumber',
+    'g2_mobileNumber', 'g2_landlineNumber',
+  ]
+  phoneKeys.forEach(k => { if (form[k] && HAS_LETTER.test(form[k])) errs[k] = 'Phone number cannot contain letters' })
+
+  if (form.emailAddress && !VALID_EMAIL.test(form.emailAddress))
+    errs.emailAddress = 'Please enter a valid email address'
+
+  if (form.expectedIncome && HAS_LETTER.test(String(form.expectedIncome)))
+    errs.expectedIncome = 'Income must be a number'
+
+  return errs
 }
 
 function field(form, setForm, key, extra = {}) {
@@ -242,11 +256,9 @@ function buildPayload(form, items, id = null) {
     ],
 
     items: items.map(i => ({
-      itemCode: i.code,
-      itemName: i.item_name,
-      model: i.model,
-      itemValue: i.item_value,
+      modelBadgeId: i.modelBadgeId,
       durationMonths: i.duration_months,
+      remark: i.remark || null,
     })),
   }
 }
@@ -286,49 +298,113 @@ function AddressGroup({ label, baseKey, form, setForm }) {
 }
 
 function ItemsGrid({ items, setItems }) {
-  const [searchCode, setSearchCode] = useState('')
-  const [searchError, setSearchError] = useState('')
+  const [catalogue,      setCatalogue]      = useState([])
+  const [catalogueError, setCatalogueError] = useState(false)
+  const [selCategory,    setSelCategory]    = useState('')
+  const [selItem,        setSelItem]        = useState('')
+  const [selModelId,     setSelModelId]     = useState('')
+  const [addError,       setAddError]       = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken')
+    getApprovedItems(token).then(res => {
+      const list = res.data?.items ?? []
+      setCatalogue(list)
+      setCatalogueError(list.length === 0)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (catalogue.length === 0) return
+    setItems(prev => prev.map(i => {
+      if (i.monthly_rental != null) return i
+      const entry = catalogue.find(c => c.modelBadgeId === i.modelBadgeId)
+      if (!entry) return i
+      return { ...i, monthly_rental: entry['month' + i.duration_months] ?? 0 }
+    }))
+  }, [catalogue])
+
+  const categories     = [...new Set(catalogue.map(c => c.category))]
+  const filteredItems  = [...new Set(catalogue.filter(c => c.category === selCategory).map(c => c.itemName))]
+  const filteredModels = catalogue.filter(c => c.category === selCategory && c.itemName === selItem)
+
+  function handleCategorySelect(e) { setSelCategory(e.target.value); setSelItem(''); setSelModelId(''); setAddError('') }
+  function handleItemSelect(e)     { setSelItem(e.target.value); setSelModelId(''); setAddError('') }
+  function handleModelSelect(e)    { setSelModelId(e.target.value); setAddError('') }
 
   function handleAdd() {
-    const code = searchCode.trim().toUpperCase()
-    if (!code) return
-    if (items.find(i => i.code === code)) { setSearchError('This item is already added.'); return }
-    const found = MOCK_CATALOGUE[code]
-    if (!found) { setSearchError(`Item code "${code}" not found.`); return }
-    setItems(prev => [...prev, { code, ...found, duration_months: 24 }])
-    setSearchCode('')
-    setSearchError('')
+    const entry = catalogue.find(c => c.modelId === Number(selModelId))
+    if (!entry) { setAddError('Please select a model.'); return }
+    if (items.find(i => i.modelId === entry.modelId)) { setAddError('This item is already added.'); return }
+    setItems(prev => [...prev, { ...entry, duration_months: 24, monthly_rental: entry.month24 ?? 0, remark: '' }])
+    setSelCategory(''); setSelItem(''); setSelModelId(''); setAddError('')
   }
 
-  function handleDurationChange(code, months) {
-    setItems(prev => prev.map(i => i.code === code ? { ...i, duration_months: Number(months) } : i))
+  function handleDurationChange(modelBadgeId, months) {
+    const entry = catalogue.find(c => c.modelBadgeId === modelBadgeId)
+    const monthly_rental = entry ? (entry['month' + months] ?? 0) : 0
+    setItems(prev => prev.map(i =>
+      i.modelBadgeId === modelBadgeId
+        ? { ...i, duration_months: Number(months), monthly_rental }
+        : i
+    ))
   }
+
+  function handleRemarkChange(modelId, text) {
+    setItems(prev => prev.map(i => i.modelId === modelId ? { ...i, remark: text } : i))
+  }
+
+  const selBase    = 'w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none transition-colors duration-100'
+  const selEnabled = `${selBase} border-[#e5e5e5] bg-white text-[#000] focus:border-[#14213d] cursor-pointer`
+  const selDis     = `${selBase} border-[#e5e5e5] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[#222]">Item Code</label>
-        <div className="flex gap-2">
-          <input
-            value={searchCode}
-            onChange={e => { setSearchCode(e.target.value); setSearchError('') }}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="e.g. FUR-001, COUCH-02"
-            className="flex-1 px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100"
-          />
-          <button
-            type="button"
-            onClick={handleAdd}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#14213d] text-white text-sm font-medium hover:bg-[#fca311] hover:text-[#14213d] transition-colors duration-150 cursor-pointer whitespace-nowrap"
-          >
-            <Plus size={15} />
-            Add Item
-          </button>
+      {catalogueError && (
+        <p className="text-xs text-red-500">Items not available — no approved badge found.</p>
+      )}
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-[#222]">Category</label>
+          <select value={selCategory} onChange={handleCategorySelect} disabled={catalogueError}
+            className={catalogueError ? selDis : selEnabled}>
+            <option value="">Select category…</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
-        {searchError
-          ? <p className="text-xs text-red-500">{searchError}</p>
-          : <p className="text-xs text-[#bbb]">Available codes: {Object.keys(MOCK_CATALOGUE).join(', ')}</p>
-        }
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-[#222]">Item</label>
+          <select value={selItem} onChange={handleItemSelect} disabled={!selCategory || catalogueError}
+            className={(!selCategory || catalogueError) ? selDis : selEnabled}>
+            <option value="">Select item…</option>
+            {filteredItems.map(i => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-[#222]">Model</label>
+          <select value={selModelId} onChange={handleModelSelect} disabled={!selItem || catalogueError}
+            className={(!selItem || catalogueError) ? selDis : selEnabled}>
+            <option value="">Select model…</option>
+            {filteredModels.map(m => (
+              <option key={m.modelId} value={m.modelId}>
+                {m.modelName}{m.size ? ` (${m.size})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleAdd}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#14213d] text-white text-sm font-medium hover:bg-[#fca311] hover:text-[#14213d] transition-colors duration-150 cursor-pointer whitespace-nowrap"
+        >
+          <Plus size={15} />
+          Add Item
+        </button>
+        {addError && <p className="text-xs text-red-500">{addError}</p>}
       </div>
 
       {items.length > 0 ? (
@@ -346,33 +422,46 @@ function ItemsGrid({ items, setItems }) {
             </thead>
             <tbody>
               {items.map((item, i) => {
-                const monthly = Math.ceil(item.item_value / item.duration_months)
+                const rowCls = `border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`
                 return (
-                  <tr key={item.code} className={`border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
-                    <td className="px-4 py-3 text-[#222] font-medium">{item.item_name}</td>
-                    <td className="px-4 py-3 text-[#666]">{item.model}</td>
-                    <td className="px-4 py-3 text-[#444]">{LKR(item.item_value)}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={item.duration_months}
-                        onChange={e => handleDurationChange(item.code, e.target.value)}
-                        className="px-2.5 py-1.5 rounded-lg border border-[#e5e5e5] text-sm text-[#000] bg-white focus:outline-none focus:border-[#14213d] cursor-pointer"
-                      >
-                        {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(monthly)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setItems(prev => prev.filter(i => i.code !== item.code))}
-                        className="text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-                        title="Remove item"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={item.modelId}>
+                    <tr className={rowCls}>
+                      <td className="px-4 py-3 text-[#222] font-medium">{item.itemName}</td>
+                      <td className="px-4 py-3 text-[#666]">{item.modelName}{item.size ? ` (${item.size})` : ''}</td>
+                      <td className="px-4 py-3 text-[#444]">{LKR(item.price)}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={item.duration_months}
+                          onChange={e => handleDurationChange(item.modelBadgeId, e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg border border-[#e5e5e5] text-sm text-[#000] bg-white focus:outline-none focus:border-[#14213d] cursor-pointer"
+                        >
+                          {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(item.monthly_rental ?? 0)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setItems(prev => prev.filter(i => i.modelId !== item.modelId))}
+                          className="text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Remove item"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                    <tr className={rowCls}>
+                      <td colSpan={6} className="px-4 pb-3 pt-0">
+                        <textarea
+                          value={item.remark}
+                          onChange={e => handleRemarkChange(item.modelId, e.target.value)}
+                          rows={1}
+                          placeholder="Remark (optional)"
+                          className="w-full px-3 py-1.5 rounded-md border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#555] placeholder-[#ccc] focus:outline-none focus:border-[#14213d] resize-none transition-colors duration-100"
+                        />
+                      </td>
+                    </tr>
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -381,7 +470,7 @@ function ItemsGrid({ items, setItems }) {
                 <tr className="border-t-2 border-[#e5e5e5] bg-[#f9f9f9]">
                   <td colSpan={4} className="px-4 py-3 text-sm font-medium text-[#555]">Total Monthly Installment</td>
                   <td className="px-4 py-3 font-bold text-[#14213d]">
-                    {LKR(items.reduce((sum, i) => sum + Math.ceil(i.item_value / i.duration_months), 0))}
+                    {LKR(items.reduce((sum, i) => sum + (i.monthly_rental ?? 0), 0))}
                   </td>
                   <td />
                 </tr>
@@ -391,15 +480,24 @@ function ItemsGrid({ items, setItems }) {
         </div>
       ) : (
         <div className="border border-dashed border-[#d8d8d8] rounded-lg py-10 text-center">
-          <p className="text-sm text-[#bbb]">No items added yet. Search by item code above.</p>
+          <p className="text-sm text-[#bbb]">No items added yet. Select from dropdowns above.</p>
         </div>
       )}
     </div>
   )
 }
 
-function GuarantorFields({ prefix, form, setForm }) {
-  const f = (key, extra) => field(form, setForm, `${prefix}_${key}`, extra)
+function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors }) {
+  const f = (key, extra) => {
+    const fullKey = `${prefix}_${key}`
+    const base = field(form, setForm, fullKey, extra)
+    return {
+      ...base,
+      onChange: e => { base.onChange(e); setErrors(p => { const n = { ...p }; delete n[fullKey]; return n }) },
+      error: errors[fullKey],
+    }
+  }
+  const phone = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9\s+\-]/g, '') } }) } }
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-3 gap-4">
@@ -408,8 +506,8 @@ function GuarantorFields({ prefix, form, setForm }) {
       </div>
       <div className="grid grid-cols-3 gap-4">
         <Input label="NIC Number"    {...f('nicNumber')}      placeholder="NIC" />
-        <Input label="Mobile Number" {...f('mobileNumber')}   type="tel" placeholder="07X XXX XXXX" />
-        <Input label="Landline"      {...f('landlineNumber')} type="tel" placeholder="0XX XXX XXXX" />
+        <Input label="Mobile Number" {...phone('mobileNumber')}   type="tel" placeholder="07X XXX XXXX" />
+        <Input label="Landline"      {...phone('landlineNumber')} type="tel" placeholder="0XX XXX XXXX" />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <Input label="Nearest Post Office" {...f('nearestPostOffice')} placeholder="Post office name" />
@@ -426,23 +524,45 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
   const [items, setItems] = useState(
     initialData?.items
       ? initialData.items.map(i => ({
-          code: i.code,
-          item_name: i.item_name,
-          model: i.model,
-          item_value: Number(i.item_value),
-          duration_months: i.duration_months,
+          modelBadgeId:   i.modelBadgeId,
+          modelId:        i.modelId,
+          category:       i.category,
+          itemName:       i.itemName || i.item_name,
+          modelName:      i.modelName || i.model,
+          size:           i.size,
+          price:          Number(i.price || i.item_value),
+          duration_months: i.duration_months || i.durationMonths || 24,
+          remark:         i.remark || '',
         }))
       : []
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState({})
   const [savedOrder, setSavedOrder] = useState(null)
 
-  const f = (key, extra) => field(form, setForm, key, extra)
+  const f = (key, extra) => {
+    const base = field(form, setForm, key, extra)
+    return {
+      ...base,
+      onChange: e => { base.onChange(e); setErrors(p => { const n = { ...p }; delete n[key]; return n }) },
+      error: errors[key],
+    }
+  }
+
+  const phone   = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9\s+\-]/g, '') } }) } }
+  const numeric = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9.]/g, '')   } }) } }
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (items.length === 0) { setError('Please add at least one item.'); return }
+    const validationErrors = validate(form)
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      setError('Please fix the highlighted fields before submitting.')
+      return
+    }
+    setErrors({})
     setError('')
     setLoading(true)
     try {
@@ -517,7 +637,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                 {form.maritalStatus === 'Married' && (
                   <>
                     <Input label="Spouse Name"           {...f('spouseName')}          placeholder="Spouse full name" className="col-span-2" />
-                    <Input label="Spouse Contact Number" {...f('spouseContactNumber')} type="tel" placeholder="07X XXX XXXX" />
+                    <Input label="Spouse Contact Number" {...phone('spouseContactNumber')} type="tel" placeholder="07X XXX XXXX" />
                   </>
                 )}
               </div>
@@ -527,8 +647,8 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
             <SubGroup label="Contact Details">
               <div className="grid grid-cols-3 gap-4">
-                <Input label="Mobile Number"   {...f('mobileNumber')}  type="tel"   placeholder="07X XXX XXXX" />
-                <Input label="Landline Number" {...f('landlineNumber')} type="tel"  placeholder="0XX XXX XXXX" />
+                <Input label="Mobile Number"   {...phone('mobileNumber')}   type="tel" placeholder="07X XXX XXXX" />
+                <Input label="Landline Number" {...phone('landlineNumber')} type="tel" placeholder="0XX XXX XXXX" />
                 <Input label="Email Address"   {...f('emailAddress')}  type="email" placeholder="example@email.com" />
               </div>
             </SubGroup>
@@ -537,7 +657,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
             <SubGroup label="Financial">
               <div className="grid grid-cols-2 gap-4">
-                <Input  label="Expected Monthly Income (LKR)" {...f('expectedIncome')} type="number" placeholder="Gross monthly salary" />
+                <Input  label="Expected Monthly Income (LKR)" {...numeric('expectedIncome')} type="number" placeholder="Gross monthly salary" />
                 <Select label="Payment Method"                {...f('paymentMethod')}  options={PAYMENT_OPTIONS} />
               </div>
             </SubGroup>
@@ -573,9 +693,9 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
               <Select label="Relationship" {...f('relativeRelationship')} options={RELATIONSHIP_OPTIONS} />
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <Input label="Mobile Number"      {...f('relativeMobileNumber')}      type="tel" placeholder="07X XXX XXXX" />
-              <Input label="Landline Number"    {...f('relativeLandlineNumber')}    type="tel" placeholder="0XX XXX XXXX" />
-              <Input label="Alternative Number" {...f('relativeAlternativeNumber')} type="tel" placeholder="Any other contact" />
+              <Input label="Mobile Number"      {...phone('relativeMobileNumber')}      type="tel" placeholder="07X XXX XXXX" />
+              <Input label="Landline Number"    {...phone('relativeLandlineNumber')}    type="tel" placeholder="0XX XXX XXXX" />
+              <Input label="Alternative Number" {...phone('relativeAlternativeNumber')} type="tel" placeholder="Any other contact" />
             </div>
             <AddressGroup label="Permanent Address" baseKey="relativePermanentAddress" form={form} setForm={setForm} />
           </div>
@@ -586,11 +706,11 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
           <div className="flex flex-col gap-6">
             <div>
               <p className="text-xs font-semibold text-[#fca311] uppercase tracking-widest mb-4">Guarantor 01</p>
-              <GuarantorFields prefix="g1" form={form} setForm={setForm} />
+              <GuarantorFields prefix="g1" form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
             </div>
             <div className="border-t border-[#e5e5e5] pt-6">
               <p className="text-xs font-semibold text-[#fca311] uppercase tracking-widest mb-4">Guarantor 02</p>
-              <GuarantorFields prefix="g2" form={form} setForm={setForm} />
+              <GuarantorFields prefix="g2" form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
             </div>
           </div>
         </FormSection>

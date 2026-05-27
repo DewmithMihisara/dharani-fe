@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import Button from '../components/Button'
+import { approveBadge } from '../api/inventoryApi'
 
 function LKR(n) { return `LKR ${Number(n).toLocaleString('en-LK')}` }
 
@@ -12,6 +14,20 @@ const HEADER_CHIP = {
 const th = 'sticky top-0 bg-[#14213d] px-3 py-3 font-medium whitespace-nowrap text-left'
 
 export default function BadgeView({ badge, onClose, onApprove }) {
+  const [approving, setApproving] = useState(false)
+
+  async function handleApprove() {
+    setApproving(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await approveBadge(badge.id, token)
+      if (res.status === 200) onApprove(badge.id)
+      else alert(res.message || 'Failed to approve badge')
+    } finally {
+      setApproving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
@@ -75,31 +91,31 @@ export default function BadgeView({ badge, onClose, onApprove }) {
                     >
                       <td className="px-3 py-2 text-center text-xs text-[#ccc] font-medium">{i + 1}</td>
                       <td className="px-3 py-2 text-[#555]">{e.category}</td>
-                      <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{e.item}</td>
-                      <td className="px-3 py-2 text-[#555]">{e.model}</td>
+                      <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{e.itemName}</td>
+                      <td className="px-3 py-2 text-[#555]">{e.modelName}</td>
                       <td className="px-3 py-2 text-[#555]">{e.size || '—'}</td>
                       <td className="px-3 py-2 text-[#444] whitespace-nowrap">{LKR(e.transferPrice)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="text-[#444]">{LKR(e.adminCostValue)}</div>
+                        <div className="text-[#444]">{LKR(e.adminCost)}</div>
                         <div className="text-[10px] text-[#999]">{e.adminCostPct}%</div>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="text-[#444]">{LKR(e.spValue)}</div>
-                        <div className="text-[10px] text-[#999]">{e.spPct}%</div>
+                        <div className="text-[#444]">{LKR(e.salesAndPromotion)}</div>
+                        <div className="text-[10px] text-[#999]">{e.salesAndPromotionPct}%</div>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="text-[#444]">{LKR(e.transportValue)}</div>
+                        <div className="text-[#444]">{LKR(e.transport)}</div>
                         <div className="text-[10px] text-[#999]">{e.transportPct}%</div>
                       </td>
                       <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{LKR(e.totalCost)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="font-bold text-[#14213d]">{LKR(e.price)}</div>
-                        <div className="text-[10px] text-[#999]">+{e.pricePct}% markup</div>
+                        <div className="text-[10px] text-[#999]">Tax {e.taxPct}%</div>
                       </td>
-                      <td className="px-3 py-2 text-[#555]">{e.m6  || '—'}</td>
-                      <td className="px-3 py-2 text-[#555]">{e.m12 || '—'}</td>
-                      <td className="px-3 py-2 text-[#555]">{e.m18 || '—'}</td>
-                      <td className="px-3 py-2 text-[#555]">{e.m24 || '—'}</td>
+                      <td className="px-3 py-2 text-[#555]">{e.month6  || '—'}</td>
+                      <td className="px-3 py-2 text-[#555]">{e.month12 || '—'}</td>
+                      <td className="px-3 py-2 text-[#555]">{e.month18 || '—'}</td>
+                      <td className="px-3 py-2 text-[#555]">{e.month24 || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -116,8 +132,8 @@ export default function BadgeView({ badge, onClose, onApprove }) {
               Close
             </button>
             {badge.status === 'PENDING' && (
-              <Button type="button" onClick={() => onApprove(badge.id)}>
-                Approve
+              <Button type="button" disabled={approving} onClick={handleApprove}>
+                {approving ? 'Approving…' : 'Approve'}
               </Button>
             )}
           </div>

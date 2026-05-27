@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X } from 'lucide-react'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
 import NewOrderForm from './NewOrderForm'
-import { getAllOrdersPaginated, getOrderById, deleteOrder } from '../api/orderApi'
+import { getAllOrdersPaginated, getOrderById, deleteOrder, printSingerForm } from '../api/orderApi'
 
 const STATUS_VARIANT = {
   APPROVAL_PROCESSING: 'approval',
@@ -82,48 +82,12 @@ function SubGroup({ title, cols = 3, children }) {
 
 // ── Order detail modal ────────────────────────────────────────────────────────
 
-function OrderDetailModal({ order, onClose, onSave }) {
-  const [newStatus,     setNewStatus]     = useState(order.status)
-  const [remark,        setRemark]        = useState('')
-  const [isPartial,     setIsPartial]     = useState(false)
-  const [partialAmount, setPartialAmount] = useState('')
-  const [confirmMsg,    setConfirmMsg]    = useState(null)
-
+function OrderDetailModal({ order, onClose }) {
   const o = order
-
-  function handleSaveClick() {
-    if (!remark.trim()) return
-    let msg = `Update ${o.id} status to "${STATUS_LABELS[newStatus]}"?`
-    if (isPartial && partialAmount)
-      msg += ` Partial payment of ${LKR(partialAmount)} will be recorded.`
-    setConfirmMsg(msg)
-  }
-
-  function handleConfirm() {
-    onSave({
-      newStatus,
-      remark: remark.trim(),
-      partialAmount: isPartial && partialAmount ? Number(partialAmount) : null,
-    })
-    setRemark('')
-    setIsPartial(false)
-    setPartialAmount('')
-    setConfirmMsg(null)
-  }
-
-  const inputCls = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-
-      {confirmMsg && (
-        <ConfirmDialog
-          message={confirmMsg}
-          onConfirm={handleConfirm}
-          onCancel={() => setConfirmMsg(null)}
-        />
-      )}
 
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-[#f0f0f0] rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden">
@@ -251,15 +215,25 @@ function OrderDetailModal({ order, onClose, onSave }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {o.items.map((item, i) => (
-                      <tr key={item.code} className={`border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
-                        <td className="px-4 py-3 text-[#222] font-medium">{item.item_name}</td>
-                        <td className="px-4 py-3 text-[#666]">{item.model}</td>
-                        <td className="px-4 py-3 text-[#444]">{LKR(item.item_value)}</td>
-                        <td className="px-4 py-3 text-[#555]">{item.duration_months} months</td>
-                        <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(Math.ceil(item.item_value / item.duration_months))}</td>
-                      </tr>
-                    ))}
+                    {o.items.map((item, i) => {
+                      const rowCls = `border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`
+                      return (
+                        <Fragment key={item.code ?? i}>
+                          <tr className={rowCls}>
+                            <td className="px-4 py-3 text-[#222] font-medium">{item.item_name}</td>
+                            <td className="px-4 py-3 text-[#666]">{item.model}</td>
+                            <td className="px-4 py-3 text-[#444]">{LKR(item.item_value)}</td>
+                            <td className="px-4 py-3 text-[#555]">{item.duration_months} months</td>
+                            <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(Math.ceil(item.item_value / item.duration_months))}</td>
+                          </tr>
+                          {item.remark && (
+                            <tr className={rowCls}>
+                              <td colSpan={5} className="px-4 pb-3 pt-0 text-xs text-[#888] italic">{item.remark}</td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                   {o.items.length > 1 && (
                     <tfoot>
@@ -276,71 +250,7 @@ function OrderDetailModal({ order, onClose, onSave }) {
             </DetailSection>
           )}
 
-          {/* ③ Update Status */}
-          <DetailSection title="Update Status">
-            <div className="grid grid-cols-[1fr_2fr] gap-4 items-start">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">New Status</label>
-                <select
-                  value={newStatus}
-                  onChange={e => setNewStatus(e.target.value)}
-                  className={inputCls + ' cursor-pointer'}
-                >
-                  {Object.keys(STATUS_LABELS).map(s => (
-                    <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">
-                  Remark <span className="text-[#fca311]">*</span>
-                </label>
-                <textarea
-                  value={remark}
-                  onChange={e => setRemark(e.target.value)}
-                  rows={2}
-                  placeholder="Enter a remark for this status update..."
-                  className={inputCls + ' resize-none placeholder-[#bbb]'}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={isPartial}
-                    onChange={e => setIsPartial(e.target.checked)}
-                    className="w-4 h-4 rounded border-[#d8d8d8] accent-[#14213d] cursor-pointer"
-                  />
-                  <span className="text-sm text-[#333]">Partial Payment</span>
-                </label>
-                {isPartial && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-[#555]">LKR</span>
-                    <input
-                      type="number"
-                      value={partialAmount}
-                      onChange={e => setPartialAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      min={0}
-                      className="px-3 py-2 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100 w-44 placeholder-[#bbb]"
-                    />
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={handleSaveClick}
-                disabled={!remark.trim()}
-                className="px-5 py-2.5 rounded-lg bg-[#14213d] text-white text-sm font-medium hover:bg-[#fca311] hover:text-[#14213d] transition-colors duration-100 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Save Status Update
-              </button>
-            </div>
-          </DetailSection>
-
-          {/* ④ Order History */}
+          {/* ③ Order History */}
           {o.history && o.history.length > 0 && (
             <DetailSection title="Order History">
               <div className="flex flex-col">
@@ -408,7 +318,7 @@ function ActionButtons({ order, onView, onEdit, onDelete }) {
         <button
           className={iconBtn}
           title="Print Singer Finance Form"
-          onClick={() => confirm(`Print Singer Finance form for ${displayId}?`, () => {})}
+          onClick={() => { const token = localStorage.getItem('accessToken'); printSingerForm(order.orderId, token) }}
         >
           <Printer size={15} />
         </button>
@@ -540,9 +450,12 @@ export default function OrdersPage() {
   const [orders,    setOrders]    = useState([])
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
-  const [limit,     setLimit]     = useState(10)
-  const [offset,    setOffset]    = useState(0)
-  const [total,     setTotal]     = useState(0)
+  const [limit,      setLimit]      = useState(10)
+  const [offset,     setOffset]     = useState(0)
+  const [total,      setTotal]      = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const backToList = () => { setEditOrder(null); setView('list'); setRefreshKey(k => k + 1) }
 
   useEffect(() => {
     async function load() {
@@ -554,7 +467,7 @@ export default function OrdersPage() {
       }
     }
     load()
-  }, [offset, limit])
+  }, [offset, limit, refreshKey])
 
   function handleLimitChange(newLimit) {
     setLimit(newLimit)
@@ -567,19 +480,6 @@ export default function OrdersPage() {
 
   function handleNext() {
     setOffset(prev => prev + limit < total ? prev + limit : prev)
-  }
-
-  function handleSave({ newStatus, remark, partialAmount }) {
-    const today = new Date().toISOString().slice(0, 10)
-    const entry = { date: today, status: newStatus, remark }
-    const update = o => ({
-      ...o,
-      status: newStatus,
-      history: [entry, ...(o.history || [])],
-      partialPayment: partialAmount != null ? { amount: partialAmount } : o.partialPayment,
-    })
-    setOrders(prev => prev.map(o => o.id === viewOrder.id ? update(o) : o))
-    setViewOrder(prev => update(prev))
   }
 
   async function handleView(order) {
@@ -609,7 +509,6 @@ export default function OrdersPage() {
         <OrderDetailModal
           order={viewOrder}
           onClose={() => setViewOrder(null)}
-          onSave={handleSave}
         />
       )}
 
@@ -636,12 +535,12 @@ export default function OrdersPage() {
         </>
       ) : view === 'edit' ? (
         <NewOrderForm
-          onBack={() => { setEditOrder(null); setView('list') }}
+          onBack={backToList}
           initialData={editOrder}
           orderId={editOrder?.orderId}
         />
       ) : (
-        <NewOrderForm onBack={() => setView('list')} />
+        <NewOrderForm onBack={backToList} />
       )}
     </div>
   )
