@@ -1,5 +1,14 @@
 import { apiGet, apiDelete, apiPost } from './api'
 
+export async function getBranches(token = null) {
+  return apiGet('/ref/branches', token)
+}
+
+export async function getProjectsByBranch(branchId = null, token = null) {
+  const path = branchId ? `/ref/projects?branchId=${branchId}` : '/ref/projects'
+  return apiGet(path, token)
+}
+
 export async function getAllOrders(token = null) {
   return apiGet('/orders', token)
 }
@@ -54,75 +63,82 @@ export async function printSingerForm(orderId, token = null) {
 <title>Singer Finance Offer Letter</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',Courier,monospace;font-size:11px;color:#000;
+body{font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;
      width:210mm;margin:0 auto;padding:8mm 10mm}
-@media print{body{padding:6mm 8mm}@page{size:A4;margin:0}}
-.hdr{text-align:center;font-weight:bold;font-size:12px;line-height:1.7;margin-bottom:5px}
+@media print{body{padding:6mm 10mm}@page{size:A4;margin:0}}
+.hdr{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
+.hdr-name{font-size:16px;font-weight:bold;letter-spacing:0.5px;line-height:1.5}
+.hdr-addr{font-size:13px;line-height:1.6}
+.customer-info{margin-bottom:8px}
+.ci-row{display:flex;align-items:baseline;margin-bottom:5px;gap:3px}
+.ci-label{min-width:140px;white-space:nowrap;font-weight:bold}
+.ci-colon{margin-right:3px}
+.ci-val{border-bottom:1px dotted #777;flex:1;padding-left:4px;min-height:15px}
+.ci-gap{min-width:30px}
+.ci-label2{white-space:nowrap;font-weight:bold}
+.ci-box{border:1px solid #000;padding:1px 8px;min-width:90px;text-align:center;display:inline-block}
+.date-seg{border:1px solid #000;padding:1px 7px;min-width:30px;text-align:center;display:inline-block}
+.date-slash{margin:0 2px}
 .outer{border:1.5px solid #000}
-.top-row{display:flex;border-bottom:1px solid #000}
-.top-left{flex:1;padding:4px 8px;display:flex;flex-direction:column;gap:3px}
-.top-right{min-width:175px;border-left:1px solid #000;padding:5px 8px;
-           display:flex;flex-direction:column;justify-content:space-around;gap:6px}
-.frow{display:flex;align-items:baseline;gap:4px;font-size:11px}
-.flabel{white-space:nowrap;min-width:110px}
-.fdots{flex:1;border-bottom:1px dotted #777;min-height:14px;padding-left:4px}
-.epf-row{display:flex;align-items:center;gap:6px;font-size:11px}
-.box{border:1px solid #000;padding:1px 6px;min-width:70px;text-align:center}
-.date-wrap{display:flex;align-items:center;gap:4px;font-size:11px}
-.dcell{border:1px solid #000;padding:1px 5px;min-width:26px;text-align:center}
-.dsep{border-left:1px solid #000;border-right:1px solid #000;padding:1px 3px}
-table.items{width:100%;border-collapse:collapse;font-size:10.5px}
+table.items{width:100%;border-collapse:collapse;font-size:11.5px}
 table.items th,table.items td{border:1px solid #000;vertical-align:middle}
-table.items th{padding:3px 4px;text-align:center;font-size:10px;font-weight:bold}
-table.items tr{height:30px}
+table.items th{padding:3px 4px;text-align:center;font-size:10.5px;font-weight:bold}
+table.items tr{height:32px}
 .num{width:22px;text-align:center;padding:2px 3px}
 .pl{padding:2px 5px}
 .r{text-align:right;padding:2px 5px}
 .c{text-align:center;padding:2px 5px}
 .bot{display:flex;border-top:1px solid #000}
-.bot-left{border-right:1px solid #000;padding:8px 10px;min-width:145px;display:flex;flex-direction:column;gap:8px}
-.bfield{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
-.bfield .box{min-width:60px}
-.bot-mid{flex:1;border-right:1px solid #000;padding:6px 8px;font-size:10.5px}
-.bot-right{flex:1;padding:6px 8px;font-size:10.5px}
-.sec-title{text-align:center;font-weight:bold;font-size:11px;margin-bottom:3px}
-.offer-title{text-align:center;font-weight:bold;font-size:12px;margin:8px 0 5px}
-.cond{font-size:9.5px;line-height:1.55;padding:0 2px}
+.bot-left{border-right:1px solid #000;padding:8px 12px;min-width:200px}
+.bfields{display:grid;grid-template-columns:auto auto auto;align-items:center;gap:7px 8px;font-size:12px}
+.bl-label{white-space:nowrap}
+.bl-box{border:1px solid #000;padding:2px 6px;min-width:85px;text-align:center}
+.bl-unit{white-space:nowrap}
+.bot-mid{flex:1;border-right:1px solid #000;padding:6px 8px}
+.bot-right{flex:1;padding:6px 8px}
+.sec-title{text-align:center;font-weight:bold;font-size:12px;margin-bottom:3px}
+.offer-title{text-align:center;font-weight:bold;font-size:13px;margin:8px 0 5px}
+.cond{font-size:10px;line-height:1.5;padding:0 2px}
 .cond p{margin-bottom:3px}
-.cond ol{margin-left:16px;margin-bottom:5px}
+.cond ol{margin-left:16px;margin-bottom:4px}
 .cond ol li{margin-bottom:2px}
 .bold{font-weight:bold}
-.sig{margin-top:24px;font-size:10px}
-.sig-line{border-bottom:1px solid #000;width:200px;margin-top:26px;margin-bottom:3px}
+.sig{margin-top:16px;font-size:12px}
+.sig-line{border-bottom:1px solid #000;width:220px;margin-top:70px;margin-bottom:3px}
 </style></head><body>
+
 <div class="hdr">
-  Financed by Singer Finance (Lanka) PLC<br>
-  No. 498, R. A. De Mel Mawatha, Colombo 03.<br>
-  Tel : 0112 400 400
+  <div class="hdr-name">Financed by Singer Finance (Lanka) PLC</div>
+  <div class="hdr-addr">No. 498, R. A. De Mel Mawatha, Colombo 03.&nbsp;&nbsp;&nbsp;Tel : 0112 400 400</div>
+</div>
+
+<div class="customer-info">
+  <div class="ci-row">
+    <span class="ci-label">Institution</span>
+    <span class="ci-colon">:</span>
+    <span class="ci-val">${o.companyName || ''}</span>
+    <span class="ci-gap"></span>
+    <span class="ci-label2">EPF Number</span>
+    <span class="ci-colon">:</span>
+    <span class="ci-box">${o.employeeId || ''}</span>
+  </div>
+  <div class="ci-row">
+    <span class="ci-label">Customer Name</span>
+    <span class="ci-colon">:</span>
+    <span class="ci-val">${o.fullNameWithInitials || ''}</span>
+    <span class="ci-gap"></span>
+    <span class="ci-label2">Date</span>
+    <span class="ci-colon">:</span>
+    <span class="date-seg">${dd}</span><span class="date-slash">/</span><span class="date-seg">${mm}</span><span class="date-slash">/</span><span class="date-seg">${yyyy}</span>
+  </div>
+  <div class="ci-row">
+    <span class="ci-label">Contact Number</span>
+    <span class="ci-colon">:</span>
+    <span class="ci-val">${o.mobileNumber || ''}</span>
+  </div>
 </div>
 
 <div class="outer">
-  <div class="top-row">
-    <div class="top-left">
-      <div class="frow"><span class="flabel">Institution</span><span style="margin-right:3px">:</span><span class="fdots">${o.companyName || ''}</span></div>
-      <div class="frow"><span class="flabel">Customer Name</span><span style="margin-right:3px">:</span><span class="fdots">${o.fullName || ''}</span></div>
-      <div class="frow"><span class="flabel">Contact Number</span><span style="margin-right:3px">:</span><span class="fdots">${o.mobileNumber || ''}</span></div>
-    </div>
-    <div class="top-right">
-      <div class="epf-row"><span>EPF Number :</span><span class="box">${o.employeeId || ''}</span></div>
-      <div class="date-wrap">
-        <span>Date</span>
-        <div style="display:flex;border:1px solid #000">
-          <span class="dcell">${dd}</span>
-          <span class="dsep">MM</span>
-          <span class="dcell">${mm}</span>
-          <span class="dsep">MM</span>
-          <span class="dcell">${yyyy}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <table class="items">
     <thead>
       <tr>
@@ -148,9 +164,17 @@ table.items tr{height:30px}
 
   <div class="bot">
     <div class="bot-left">
-      <div class="bfield"><span>Total Rental<br>(Monthly)</span><span class="box">${fmt(totalRental)}</span></div>
-      <div class="bfield"><span>Term</span><span class="box">&nbsp;</span><span>M</span></div>
-      <div class="bfield"><span>Interest Rate<br>(Nominal)</span><span class="box">&nbsp;</span><span>%</span></div>
+      <div class="bfields">
+        <span class="bl-label">Total Rental (Monthly)</span>
+        <span class="bl-box">${fmt(totalRental)}</span>
+        <span class="bl-unit">&nbsp;</span>
+        <span class="bl-label">Term</span>
+        <span class="bl-box">&nbsp;</span>
+        <span class="bl-unit">M</span>
+        <span class="bl-label">Interest Rate (Nominal)</span>
+        <span class="bl-box">&nbsp;</span>
+        <span class="bl-unit">%</span>
+      </div>
     </div>
     <div class="bot-mid"><div class="sec-title">Supplier Details</div></div>
     <div class="bot-right"><div class="sec-title">Singer Finance (Lanka) PLC</div></div>
@@ -180,18 +204,25 @@ table.items tr{height:30px}
   </ol>
   <p>This offer is valid only for 07 days.</p>
   <p style="margin-top:5px">Please return the attached copy of this letter duly signed thereby indicating your understanding and acceptance of the terms and condition under which this facility is granted and of the security which is stipulated herein.</p>
-  <p style="margin-top:5px">We look forward to a manually beneficial relationship.</p>
-  <p style="margin-top:8px">Your faithfully,<br>Singer Finance (Lanka) PLC</p>
+  <p style="margin-top:5px">We look forward to a mutually beneficial relationship.</p>
+  <p style="margin-top:8px">Yours faithfully,<br>Singer Finance (Lanka) PLC</p>
   <p style="margin-top:5px">Accepted the terms and conditions of the facility</p>
   <div class="sig">
     <div class="sig-line"></div>
     <p>Signed by the customer</p>
   </div>
 </div>
-<script>window.onload=function(){window.print()}</script>
 </body></html>`
 
-  const w = window.open('', '_blank', 'width=900,height=750')
-  w.document.write(html)
-  w.document.close()
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0'
+  document.body.appendChild(iframe)
+  iframe.onload = () => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+    iframe.contentWindow.addEventListener('afterprint', () => iframe.remove(), { once: true })
+  }
+  iframe.contentDocument.open()
+  iframe.contentDocument.write(html)
+  iframe.contentDocument.close()
 }

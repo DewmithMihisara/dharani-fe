@@ -4,7 +4,7 @@ import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AddBadgeForm from './AddBadgeForm'
 import BadgeView from './BadgeView'
-import { getBadgesPaginated, getBadgeById } from '../api/inventoryApi'
+import { getBadgesPaginated } from '../api/inventoryApi'
 
 const iconBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
 const endBtn  = 'px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-100 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
@@ -112,9 +112,8 @@ export default function InventoryPage() {
     loadBadges(offset, limit)
   }
 
-  async function handleView(badge) {
-    const res = await getBadgeById(badge.id, token)
-    if (res.status === 200) setViewBadge(res.data.badge)
+  function handleView(badge) {
+    setViewBadge(badge)
   }
 
   function handleEnd(id) {

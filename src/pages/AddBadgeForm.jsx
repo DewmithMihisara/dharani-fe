@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import FormSection from '../components/FormSection'
 import Button from '../components/Button'
-import { saveBadge, getCategories, getItemsByCategory, getModelsByItem } from '../api/inventoryApi'
+import { saveItem, getItemsByBadge, deleteBadgeItem, getCategories, getItemsByCategory, getModelsByItem } from '../api/inventoryApi'
 import Combobox from '../components/Combobox'
 
 function LKR(n) { return `LKR ${Number(n).toLocaleString('en-LK')}` }
@@ -10,7 +10,7 @@ function round2(n) { return Math.round(n * 100) / 100 }
 function num(v) { return Number(v) || 0 }
 
 const EMPTY = {
-  category: '', item: '', model: '', modelId: null, size: '',
+  category: '', item: '', model: '', modelId: null, size: '', name: '',
   transferPrice: '',
   adminCostValue: '', adminCostPct: '',
   spValue: '',        spPct: '',
@@ -26,16 +26,19 @@ const inp    = `${base} border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb]
 const rdonly = `${base} border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none`
 const dis    = `${base} border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
 
+const inpSm    = 'w-full px-2 py-1 rounded border text-xs focus:outline-none transition-colors border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb] focus:border-[#14213d]'
+const rdonlySm = 'w-full px-2 py-1 rounded border text-xs border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none'
+const disSm    = 'w-full px-2 py-1 rounded border text-xs border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed'
+const rdonlyXs = 'w-full px-1.5 py-0.5 rounded border text-[10px] border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none'
+
 const iconBtn   = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
 const deleteBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-red-600 hover:bg-red-50 cursor-pointer'
 
 const TABLE_HEADERS = [
-  'Category','Item','Model','Size',
+  'Category','Item','Model','Name','Size',
   'Transfer Price','Admin Cost','S&P','Transport',
   'Total Cost','Tax%','Price','6M','12M','18M','24M','Actions',
 ]
-
-const PAGE_SIZE = 25
 
 function calcPrice(prev, overrides = {}) {
   const f  = { ...prev, ...overrides }
@@ -62,13 +65,27 @@ function calcInstallments(priceStr, pcts) {
   }
 }
 
-function PricingRow({ label, required, children }) {
+function PricingRowSm({ label, required, children }) {
   return (
-    <div className="grid grid-cols-[200px_1fr_1fr] gap-3 items-center py-2.5 border-b border-[#f0f0f0] last:border-0">
-      <span className="text-sm font-medium text-[#444]">
+    <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 border-b border-[#f0f0f0] last:border-0">
+      <span className="text-xs font-medium text-[#444] truncate">
         {label}{required && <span className="text-[#fca311] ml-0.5">*</span>}
       </span>
       {children}
+    </div>
+  )
+}
+
+function CompactSection({ number, title, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-[#d8d8d8]">
+      <div className="px-4 py-2 border-b border-[#e5e5e5] flex items-center gap-2">
+        <span className="w-5 h-5 rounded-md bg-[#14213d] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+          {number}
+        </span>
+        <h2 className="text-xs font-semibold text-[#14213d] tracking-wide">{title}</h2>
+      </div>
+      <div className="p-3">{children}</div>
     </div>
   )
 }
@@ -85,6 +102,7 @@ function apiEntryToForm(e) {
     model:          e.modelName     ?? '',
     modelId:        e.modelId       ?? null,
     size:           e.size          ?? '',
+    name:           e.name          ?? '',
     transferPrice:  String(e.transferPrice  ?? ''),
     adminCostValue: String(e.adminCost      ?? ''),
     adminCostPct:   String(e.adminCostPct   ?? ''),
@@ -109,46 +127,43 @@ function apiEntryToForm(e) {
 
 export default function AddBadgeForm({ badge, onBack, onSave }) {
   const [form,      setForm]      = useState(EMPTY)
-  const [entries,   setEntries]   = useState(() => {
-    if (!badge?.items) return []
-    return badge.items.map(i => ({
-      id:             i.id ?? crypto.randomUUID(),
-      category:       i.category,
-      item:           i.itemName,
-      model:          i.modelName,
-      size:           i.size,
-      transferPrice:  Number(i.transferPrice  ?? 0),
-      adminCostValue: Number(i.adminCost      ?? 0),
-      adminCostPct:   Number(i.adminCostPct   ?? 0),
-      spValue:        Number(i.salesAndPromotion    ?? 0),
-      spPct:          Number(i.salesAndPromotionPct ?? 0),
-      transportValue: Number(i.transport      ?? 0),
-      transportPct:   Number(i.transportPct   ?? 0),
-      totalCost:      Number(i.totalCost      ?? 0),
-      taxPct:         Number(i.taxPct   ?? 0),
-      taxValue:       Number(i.taxValue ?? 0),
-      price:          Number(i.price   ?? 0) - Number(i.taxValue ?? 0),
-      m6:  i.month6  ?? '', m12: i.month12 ?? '',
-      m18: i.month18 ?? '', m24: i.month24 ?? '',
-    }))
-  })
-  const [editIndex,       setEditIndex]       = useState(null)
-  const [tablePage,       setTablePage]       = useState(0)
-  const [saving,          setSaving]          = useState(false)
-  const [categoryOptions, setCategoryOptions] = useState([])
-  const [itemOptions,     setItemOptions]     = useState([])
-  const [modelOptions,    setModelOptions]    = useState([])
-  const [selectedCatId,   setSelectedCatId]   = useState(null)
-  const [selectedItemId,  setSelectedItemId]  = useState(null)
+  const [editItemId,       setEditItemId]       = useState(null)
+  const [saving,           setSaving]           = useState(false)
+  const [categoryOptions,  setCategoryOptions]  = useState([])
+  const [itemOptions,      setItemOptions]      = useState([])
+  const [modelOptions,     setModelOptions]     = useState([])
+  const [selectedCatId,    setSelectedCatId]    = useState(null)
+  const [selectedItemId,   setSelectedItemId]   = useState(null)
 
-  const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+  // Server-driven items table state
+  const [currentBadgeId, setCurrentBadgeId] = useState(badge?.id ?? null)
+  const [items,          setItems]          = useState([])
+  const [itemsTotal,     setItemsTotal]     = useState(0)
+  const [itemsOffset,    setItemsOffset]    = useState(0)
+  const [itemsLimit,     setItemsLimit]     = useState(10)
+  const [itemsLoading,   setItemsLoading]   = useState(false)
+
+  const token = localStorage.getItem('accessToken')
+
+  const loadItems = useCallback(async (badgeId, offset, limit) => {
+    if (!badgeId) { setItems([]); setItemsTotal(0); return }
+    setItemsLoading(true)
+    try {
+      const res = await getItemsByBadge(badgeId, { offset, limit }, token)
+      if (res.status === 200) {
+        setItems(res.data.items ?? [])
+        setItemsTotal(res.data.total ?? 0)
+      }
+    } finally {
+      setItemsLoading(false)
+    }
+  }, [token])
 
   useEffect(() => {
-    if (tablePage >= totalPages) setTablePage(Math.max(0, totalPages - 1))
-  }, [entries.length, totalPages])
+    loadItems(currentBadgeId, itemsOffset, itemsLimit)
+  }, [currentBadgeId, itemsOffset, itemsLimit, loadItems])
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
     getCategories(token).then(res => {
       if (res.status === 200)
         setCategoryOptions((res.data.categories ?? []).map(c => ({ id: c.id, label: c.name })))
@@ -163,7 +178,10 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
   const totalCost = tp + adminVal + spVal + transpVal
   const enabled = tp > 0
 
-  const visibleEntries = entries.slice(tablePage * PAGE_SIZE, (tablePage + 1) * PAGE_SIZE)
+  const totalPages  = Math.max(1, Math.ceil(itemsTotal / itemsLimit))
+  const currentPage = Math.floor(itemsOffset / itemsLimit) + 1
+  const fromItem    = itemsTotal === 0 ? 0 : itemsOffset + 1
+  const toItem      = Math.min(itemsOffset + itemsLimit, itemsTotal)
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function setField(key) {
@@ -236,28 +254,6 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
     })
   }
 
-  function handleInstPct(pctKey, valueKey) {
-    return e => {
-      const pct = e.target.value
-      setForm(prev => {
-        const pvat = num(prev.price) + num(prev.taxValue)
-        const val  = pvat > 0 ? String(Math.ceil(pvat * num(pct) / 100)) : ''
-        return { ...prev, [pctKey]: pct, [valueKey]: val }
-      })
-    }
-  }
-
-  function handleInstValue(valueKey, pctKey) {
-    return e => {
-      const val = e.target.value
-      setForm(prev => {
-        const pvat = num(prev.price) + num(prev.taxValue)
-        const pct  = pvat > 0 ? String(round2(num(val) / pvat * 100)) : ''
-        return { ...prev, [valueKey]: val, [pctKey]: pct }
-      })
-    }
-  }
-
   function handleCategoryChange(value, id) {
     setForm(prev => ({ ...prev, category: value, item: '', model: '', modelId: null }))
     setSelectedCatId(id)
@@ -265,7 +261,6 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
     setItemOptions([])
     setModelOptions([])
     if (id) {
-      const token = localStorage.getItem('accessToken')
       getItemsByCategory(id, token).then(res => {
         if (res.status === 200)
           setItemOptions((res.data.items ?? []).map(i => ({ id: i.id, label: i.name })))
@@ -278,7 +273,6 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
     setSelectedItemId(id)
     setModelOptions([])
     if (id) {
-      const token = localStorage.getItem('accessToken')
       getModelsByItem(id, token).then(res => {
         if (res.status === 200)
           setModelOptions((res.data.models ?? []).map(m => ({
@@ -292,112 +286,89 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
     setForm(prev => ({ ...prev, model: value, modelId: id ?? null, ...(size ? { size } : {}) }))
   }
 
-  function handleAddItem() {
+  async function handleAddItem() {
     const { category, item, model, transferPrice } = form
     if (!category || !item || !model || !transferPrice) {
       alert('Please fill in Category, Item, Model, and Transfer Price.')
       return
     }
-    const entry = {
-      id:             editIndex !== null ? entries[editIndex].id : crypto.randomUUID(),
-      category:       form.category,
-      item:           form.item,
-      model:          form.model,
-      modelId:        form.modelId ?? null,
-      size:           form.size,
-      transferPrice:  num(form.transferPrice),
-      adminCostValue: num(form.adminCostValue),
-      adminCostPct:   num(form.adminCostPct),
-      spValue:        num(form.spValue),
-      spPct:          num(form.spPct),
-      transportValue: num(form.transportValue),
-      transportPct:   num(form.transportPct),
-      totalCost,
-      taxPct:         num(form.taxPct),
-      taxValue:       num(form.taxValue),
-      price:          num(form.price),
-      m6: form.m6, m12: form.m12, m18: form.m18, m24: form.m24,
-    }
-    if (editIndex !== null) {
-      setEntries(prev => prev.map((e, i) => i === editIndex ? entry : e))
-    } else {
-      setEntries(prev => [...prev, entry])
-    }
-    setForm(EMPTY)
-    setEditIndex(null)
-    setSelectedCatId(null)
-    setSelectedItemId(null)
-    setItemOptions([])
-    setModelOptions([])
-  }
-
-  function handleEdit(globalIndex) {
-    const e = entries[globalIndex]
-    setForm(apiEntryToForm({
-      ...e,
-      adminCost:            e.adminCostValue,
-      salesAndPromotion:    e.spValue,
-      salesAndPromotionPct: e.spPct,
-      transport:            e.transportValue,
-      month6: e.m6, month12: e.m12, month18: e.m18, month24: e.m24,
-    }))
-    setEditIndex(globalIndex)
-    setSelectedCatId(null)
-    setSelectedItemId(null)
-    setItemOptions([])
-    setModelOptions([])
-  }
-
-  function handleDelete(globalIndex) {
-    if (editIndex === globalIndex) { setForm(EMPTY); setEditIndex(null) }
-    else if (editIndex !== null && globalIndex < editIndex) setEditIndex(editIndex - 1)
-    setEntries(prev => prev.filter((_, idx) => idx !== globalIndex))
-  }
-
-  async function handleSaveBadge() {
-    if (entries.length === 0) return
     setSaving(true)
     try {
-      const token = localStorage.getItem('accessToken')
-      const payload = {
-        id: badge?.id ?? null,
-        items: entries.map(e => ({
-          id:                   typeof e.id === 'number' ? e.id : null,
-          modelId:              e.modelId ?? null,
-          category:             e.category,
-          itemName:             e.item,
-          modelName:            e.model,
-          size:                 e.size,
-          transferPrice:        e.transferPrice,
-          adminCost:            e.adminCostValue,
-          adminCostPct:         e.adminCostPct,
-          salesAndPromotion:    e.spValue,
-          salesAndPromotionPct: e.spPct,
-          transport:            e.transportValue,
-          transportPct:         e.transportPct,
-          totalCost:            e.totalCost,
-          taxPct:               e.taxPct,
-          taxValue:             e.taxValue,
-          price:                round2(e.price + e.taxValue),
-          month6:  e.m6  || null,
-          month12: e.m12 || null,
-          month18: e.m18 || null,
-          month24: e.m24 || null,
-        })),
+      const dto = {
+        badgeId: currentBadgeId,
+        item: {
+          id:                   editItemId,
+          modelId:              form.modelId ?? null,
+          name:                 form.name || null,
+          category:             form.category,
+          itemName:             form.item,
+          modelName:            form.model,
+          size:                 form.size,
+          transferPrice:        num(form.transferPrice),
+          adminCost:            num(form.adminCostValue),
+          adminCostPct:         num(form.adminCostPct),
+          salesAndPromotion:    num(form.spValue),
+          salesAndPromotionPct: num(form.spPct),
+          transport:            num(form.transportValue),
+          transportPct:         num(form.transportPct),
+          totalCost,
+          taxPct:               num(form.taxPct),
+          taxValue:             num(form.taxValue),
+          price:                round2(num(form.price) + num(form.taxValue)),
+          month6:  form.m6  || null,
+          month12: form.m12 || null,
+          month18: form.m18 || null,
+          month24: form.m24 || null,
+        },
       }
-      const res = await saveBadge(payload, token)
+      const res = await saveItem(dto, token)
       if (res.status === 200) {
-        onSave()
+        if (!currentBadgeId) setCurrentBadgeId(res.data.badgeId)
+        setForm(EMPTY)
+        setEditItemId(null)
+        setSelectedCatId(null)
+        setSelectedItemId(null)
+        setItemOptions([])
+        setModelOptions([])
+        const bid = currentBadgeId ?? res.data.badgeId
+        loadItems(bid, itemsOffset, itemsLimit)
       } else {
-        alert(res.message || 'Failed to save badge')
+        alert(res.message || 'Failed to save item')
       }
     } finally {
       setSaving(false)
     }
   }
 
+  function handleEdit(item) {
+    setEditItemId(item.id)
+    setForm(apiEntryToForm(item))
+    setSelectedCatId(null)
+    setSelectedItemId(null)
+    setItemOptions([])
+    setModelOptions([])
+  }
+
+  async function handleDelete(itemId) {
+    const res = await deleteBadgeItem(itemId, token)
+    if (res.status === 200) {
+      if (editItemId === itemId) { setForm(EMPTY); setEditItemId(null) }
+      // if current page becomes empty after delete, go to previous page
+      const newTotal = itemsTotal - 1
+      const maxOffset = Math.max(0, Math.floor((newTotal - 1) / itemsLimit) * itemsLimit)
+      const safeOffset = Math.min(itemsOffset, maxOffset)
+      if (safeOffset !== itemsOffset) {
+        setItemsOffset(safeOffset)
+      } else {
+        loadItems(currentBadgeId, itemsOffset, itemsLimit)
+      }
+    } else {
+      alert(res.message || 'Failed to delete item')
+    }
+  }
+
   return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-6">
+    <div className="max-w-5xl mx-auto flex flex-col gap-4">
 
       {/* Header */}
       <div className="flex items-center gap-2">
@@ -411,7 +382,7 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
         </button>
         <span className="text-[#ccc] text-sm">/</span>
         <h1 className="text-xl font-semibold text-[#14213d]">
-          {badge ? `Edit Badge ${badge.badgeNumber}` : 'Add Badge'}
+          {badge ? `Edit Badge ${badge.badgeNumber}` : currentBadgeId ? 'Add Badge' : 'Add Badge'}
         </h1>
       </div>
 
@@ -468,161 +439,153 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
               className={inp}
             />
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-[#222]">Name <span className="text-[#999] font-normal">(optional)</span></label>
+            <input
+              value={form.name}
+              onChange={setField('name')}
+              placeholder="Custom item name"
+              className={inp}
+            />
+          </div>
         </div>
       </FormSection>
 
-      {/* ── Section 2: Pricing ── */}
-      <FormSection number="2" title="Pricing">
-        <div className="grid grid-cols-[200px_1fr_1fr] gap-3 mb-1">
-          <div />
-          <p className="text-xs font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
-          <p className="text-xs font-semibold text-[#888] uppercase tracking-wider">% of Transfer Price</p>
-        </div>
+      {/* ── Sections 2 & 3: Pricing (3/4) + Installments (1/4) ── */}
+      <div className="grid grid-cols-4 gap-4 items-start">
 
-        <PricingRow label="Transfer Price" required>
-          <input
-            type="number" min="0"
-            value={form.transferPrice} onChange={handleTransferPrice}
-            placeholder="0" className={inp}
-          />
-          <div />
-        </PricingRow>
+        {/* Section 2: Pricing */}
+        <div className="col-span-3">
+          <CompactSection number="2" title="Pricing">
+            <div className="grid grid-cols-[110px_1fr_64px] gap-2 mb-1">
+              <div />
+              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
+              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%</p>
+            </div>
 
-        {[
-          { label: 'Admin Cost',        vk: 'adminCostValue', pk: 'adminCostPct' },
-          { label: 'Sales & Promotion', vk: 'spValue',        pk: 'spPct'        },
-          { label: 'Transport',         vk: 'transportValue', pk: 'transportPct' },
-        ].map(({ label, vk, pk }) => (
-          <PricingRow key={vk} label={label}>
-            <input
-              type="number" min="0"
-              value={form[vk]}
-              onChange={handleCostValue(vk, pk)}
-              placeholder="0"
-              disabled={!enabled}
-              className={enabled ? inp : dis}
-            />
-            <div className="flex items-center gap-2">
+            <PricingRowSm label="Transfer Price" required>
               <input
                 type="number" min="0"
-                value={form[pk]}
-                onChange={handleCostPct(pk, vk)}
-                placeholder="0"
-                disabled={!enabled}
-                className={`flex-1 ${enabled ? inp : dis}`}
+                value={form.transferPrice} onChange={handleTransferPrice}
+                placeholder="0" className={inp}
               />
-              <span className="text-xs text-[#888] shrink-0">%</span>
+              <div />
+            </PricingRowSm>
+
+            {[
+              { label: 'Admin Cost',   vk: 'adminCostValue', pk: 'adminCostPct' },
+              { label: 'S&P',          vk: 'spValue',        pk: 'spPct'        },
+              { label: 'Transport',    vk: 'transportValue', pk: 'transportPct' },
+            ].map(({ label, vk, pk }) => (
+              <PricingRowSm key={vk} label={label}>
+                <input
+                  type="number" min="0"
+                  value={form[vk]}
+                  onChange={handleCostValue(vk, pk)}
+                  placeholder="0"
+                  disabled={!enabled}
+                  className={enabled ? inp : dis}
+                />
+                <input
+                  type="number" min="0"
+                  value={form[pk]}
+                  onChange={handleCostPct(pk, vk)}
+                  placeholder="0"
+                  disabled={!enabled}
+                  className={enabled ? inp : dis}
+                />
+              </PricingRowSm>
+            ))}
+
+            {/* Total Cost — read-only */}
+            <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 mt-1 border-t-2 border-[#e5e5e5]">
+              <span className="text-xs font-semibold text-[#222]">Total Cost</span>
+              <div className={rdonly}>{LKR(totalCost)}</div>
+              <div />
             </div>
-          </PricingRow>
-        ))}
 
-        {/* Total Cost — read-only */}
-        <div className="grid grid-cols-[200px_1fr_1fr] gap-3 items-center py-2.5 mt-1 border-t-2 border-[#e5e5e5]">
-          <span className="text-sm font-semibold text-[#222]">Total Cost</span>
-          <div className={rdonly}>{LKR(totalCost)}</div>
-          <div />
-        </div>
-
-        {/* Price — TotalCost × (1 + markup%) */}
-        <PricingRow label="Price">
-          <input
-            type="number" min="0"
-            value={form.price}
-            onChange={handlePrice}
-            placeholder="0"
-            disabled={!enabled}
-            className={enabled ? inp : dis}
-          />
-          <div className="flex items-center gap-2">
-            <input
-              type="number" min="0"
-              value={form.pricePct}
-              onChange={handlePricePct}
-              placeholder="0"
-              disabled={!enabled}
-              className={`flex-1 ${enabled ? inp : dis}`}
-            />
-            <span className="text-xs text-[#888] shrink-0">%</span>
-          </div>
-        </PricingRow>
-
-        {/* VAT — value + %, synced against Price */}
-        <PricingRow label="VAT">
-          <input
-            type="number" min="0"
-            value={form.taxValue}
-            onChange={handleTaxValue}
-            placeholder="0"
-            disabled={!enabled}
-            className={enabled ? inp : dis}
-          />
-          <div className="flex items-center gap-2">
-            <input
-              type="number" min="0" max="99"
-              value={form.taxPct}
-              onChange={handleTaxPct}
-              placeholder="0"
-              disabled={!enabled}
-              className={`flex-1 ${enabled ? inp : dis}`}
-            />
-            <span className="text-xs text-[#888] shrink-0">%</span>
-          </div>
-        </PricingRow>
-
-        {/* Price with VAT — read-only, stored to DB */}
-        <div className="grid grid-cols-[200px_1fr_1fr] gap-3 items-center py-2.5 mt-1 border-t-2 border-[#e5e5e5]">
-          <span className="text-sm font-semibold text-[#222]">Price with VAT</span>
-          <div className={rdonly}>{LKR(round2(num(form.price) + num(form.taxValue)))}</div>
-          <div />
-        </div>
-      </FormSection>
-
-      {/* ── Section 3: Installments ── */}
-      <FormSection number="3" title="Installments">
-        <div className="grid grid-cols-[200px_1fr_1fr] gap-3 mb-1">
-          <div />
-          <p className="text-xs font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
-          <p className="text-xs font-semibold text-[#888] uppercase tracking-wider">% of Price with VAT</p>
-        </div>
-        {[
-          { label: '6 Month',  vk: 'm6',  pk: 'm6Pct'  },
-          { label: '12 Month', vk: 'm12', pk: 'm12Pct' },
-          { label: '18 Month', vk: 'm18', pk: 'm18Pct' },
-          { label: '24 Month', vk: 'm24', pk: 'm24Pct' },
-        ].map(({ label, vk, pk }) => (
-          <PricingRow key={vk} label={label}>
-            <input
-              type="number" min="0"
-              value={form[vk]}
-              onChange={handleInstValue(vk, pk)}
-              placeholder="0"
-              disabled={!enabled}
-              className={enabled ? inp : dis}
-            />
-            <div className="flex items-center gap-2">
+            <PricingRowSm label="Price">
               <input
                 type="number" min="0"
-                value={form[pk]}
-                onChange={handleInstPct(pk, vk)}
+                value={form.price}
+                onChange={handlePrice}
                 placeholder="0"
                 disabled={!enabled}
-                className={`flex-1 ${enabled ? inp : dis}`}
+                className={enabled ? inp : dis}
               />
-              <span className="text-xs text-[#888] shrink-0">%</span>
-            </div>
-          </PricingRow>
-        ))}
-      </FormSection>
+              <input
+                type="number" min="0"
+                value={form.pricePct}
+                onChange={handlePricePct}
+                placeholder="0"
+                disabled={!enabled}
+                className={enabled ? inp : dis}
+              />
+            </PricingRowSm>
 
-      {/* Add / Update button */}
-      <div className="flex justify-end">
-        <Button type="button" onClick={handleAddItem}>
-          {editIndex !== null ? 'Update Item' : 'Add Item'}
-        </Button>
+            <PricingRowSm label="VAT">
+              <input
+                type="number" min="0"
+                value={form.taxValue}
+                onChange={handleTaxValue}
+                placeholder="0"
+                disabled={!enabled}
+                className={enabled ? inp : dis}
+              />
+              <input
+                type="number" min="0" max="99"
+                value={form.taxPct}
+                onChange={handleTaxPct}
+                placeholder="0"
+                disabled={!enabled}
+                className={enabled ? inp : dis}
+              />
+            </PricingRowSm>
+
+            {/* Price with VAT — read-only */}
+            <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 mt-1 border-t-2 border-[#e5e5e5]">
+              <span className="text-xs font-semibold text-[#222]">Price with VAT</span>
+              <div className={rdonly}>{LKR(round2(num(form.price) + num(form.taxValue)))}</div>
+              <div />
+            </div>
+          </CompactSection>
+        </div>
+
+        {/* Section 3: Installments — read-only */}
+        <div className="col-span-1 flex flex-col gap-3">
+          <CompactSection number="3" title="Installments">
+            <div className="grid grid-cols-[28px_1fr_1fr] gap-1 mb-1">
+              <div />
+              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">LKR</p>
+              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%VAT</p>
+            </div>
+            {[
+              { label: '6M',  vk: 'm6',  pk: 'm6Pct'  },
+              { label: '12M', vk: 'm12', pk: 'm12Pct' },
+              { label: '18M', vk: 'm18', pk: 'm18Pct' },
+              { label: '24M', vk: 'm24', pk: 'm24Pct' },
+            ].map(({ label, vk, pk }) => (
+              <div key={vk} className="grid grid-cols-[28px_1fr_1fr] gap-1 items-center py-1 border-b border-[#f0f0f0] last:border-0">
+                <span className="text-[10px] font-medium text-[#444]">{label}</span>
+                <input readOnly tabIndex={-1} value={form[vk]} className={rdonly} />
+                <input readOnly tabIndex={-1} value={form[pk]} className={rdonly} />
+              </div>
+            ))}
+          </CompactSection>
+
+          {/* Add / Update button */}
+          <div className="flex justify-end">
+            <Button type="button" onClick={handleAddItem} disabled={saving}>
+              {saving ? 'Saving…' : editItemId !== null ? 'Update Item' : 'Add Item'}
+            </Button>
+          </div>
+        </div>
+
       </div>
 
-      {/* ── Entries table ── */}
-      {entries.length > 0 && (
+      {/* ── Items table (API-driven) ── */}
+      {(itemsTotal > 0 || itemsLoading) && (
         <div className="flex flex-col gap-0 bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-max w-full text-sm">
@@ -634,85 +597,92 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
                 </tr>
               </thead>
               <tbody>
-                {visibleEntries.map((e, pageIdx) => {
-                  const globalIndex = tablePage * PAGE_SIZE + pageIdx
-                  return (
-                    <tr
-                      key={e.id}
-                      className={`border-t border-[#ebebeb] hover:bg-[#f5f5f5] transition-colors duration-100 ${
-                        globalIndex === editIndex ? 'bg-[#fffbec]' : pageIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
-                      }`}
-                    >
-                      <td className="px-4 py-3 text-[#555]">{e.category}</td>
-                      <td className="px-4 py-3 font-semibold text-[#14213d] whitespace-nowrap">{e.item}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.model}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.size}</td>
-                      <td className="px-4 py-3 text-[#444]">{LKR(e.transferPrice)}</td>
-                      <td className="px-4 py-3 text-[#444] whitespace-nowrap">
-                        {LKR(e.adminCostValue)} <span className="text-xs text-[#999]">({e.adminCostPct}%)</span>
-                      </td>
-                      <td className="px-4 py-3 text-[#444] whitespace-nowrap">
-                        {LKR(e.spValue)} <span className="text-xs text-[#999]">({e.spPct}%)</span>
-                      </td>
-                      <td className="px-4 py-3 text-[#444] whitespace-nowrap">
-                        {LKR(e.transportValue)} <span className="text-xs text-[#999]">({e.transportPct}%)</span>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(e.totalCost)}</td>
-                      <td className="px-4 py-3 text-[#444]">{e.taxPct}%</td>
-                      <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(round2(e.price + e.taxValue))}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.m6  || '—'}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.m12 || '—'}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.m18 || '—'}</td>
-                      <td className="px-4 py-3 text-[#555]">{e.m24 || '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button className={iconBtn}   title="Edit"   onClick={() => handleEdit(globalIndex)}><Pencil size={15} /></button>
-                          <button className={deleteBtn} title="Delete" onClick={() => handleDelete(globalIndex)}><Trash2 size={15} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {itemsLoading ? (
+                  <tr>
+                    <td colSpan={TABLE_HEADERS.length} className="px-4 py-6 text-center text-sm text-[#bbb]">
+                      Loading…
+                    </td>
+                  </tr>
+                ) : items.map((e, i) => (
+                  <tr
+                    key={e.id}
+                    className={`border-t border-[#ebebeb] hover:bg-[#f5f5f5] transition-colors duration-100 ${
+                      e.id === editItemId ? 'bg-[#fffbec]' : i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-[#555]">{e.category}</td>
+                    <td className="px-4 py-3 font-semibold text-[#14213d] whitespace-nowrap">{e.itemName}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.modelName}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.name || '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.size}</td>
+                    <td className="px-4 py-3 text-[#444]">{LKR(e.transferPrice)}</td>
+                    <td className="px-4 py-3 text-[#444] whitespace-nowrap">
+                      {LKR(e.adminCost)} <span className="text-xs text-[#999]">({e.adminCostPct}%)</span>
+                    </td>
+                    <td className="px-4 py-3 text-[#444] whitespace-nowrap">
+                      {LKR(e.salesAndPromotion)} <span className="text-xs text-[#999]">({e.salesAndPromotionPct}%)</span>
+                    </td>
+                    <td className="px-4 py-3 text-[#444] whitespace-nowrap">
+                      {LKR(e.transport)} <span className="text-xs text-[#999]">({e.transportPct}%)</span>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(e.totalCost)}</td>
+                    <td className="px-4 py-3 text-[#444]">{e.taxPct}%</td>
+                    <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(e.price)}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month6  || '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month12 || '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month18 || '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month24 || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button className={iconBtn}   title="Edit"   onClick={() => handleEdit(e)}><Pencil size={15} /></button>
+                        <button className={deleteBtn} title="Delete" onClick={() => handleDelete(e.id)}><Trash2 size={15} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           {/* Pagination bar */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5e5e5] bg-white text-xs text-[#666]">
-              <span>
-                Showing {tablePage * PAGE_SIZE + 1}–{Math.min((tablePage + 1) * PAGE_SIZE, entries.length)} of {entries.length} items
-              </span>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5e5e5] bg-white text-xs text-[#666]">
+            <span>
+              {itemsTotal === 0 ? 'No items' : `Showing ${fromItem}–${toItem} of ${itemsTotal} item${itemsTotal !== 1 ? 's' : ''}`}
+            </span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[#888]">Rows per page:</span>
+                <select
+                  value={itemsLimit}
+                  onChange={e => { setItemsLimit(Number(e.target.value)); setItemsOffset(0) }}
+                  className="border border-[#e5e5e5] rounded-md px-2 py-1 text-xs text-[#444] bg-white focus:outline-none focus:border-[#14213d] cursor-pointer"
+                >
+                  {[10, 25, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setTablePage(p => Math.max(0, p - 1))}
-                  disabled={tablePage === 0}
+                  onClick={() => setItemsOffset(o => Math.max(0, o - itemsLimit))}
+                  disabled={itemsOffset === 0}
                   className="px-2 py-1 rounded-md border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 >←</button>
-                <span className="text-[#444] font-medium">Page {tablePage + 1} of {totalPages}</span>
+                <span className="text-[#444] font-medium">Page {currentPage} of {totalPages}</span>
                 <button
-                  onClick={() => setTablePage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={tablePage >= totalPages - 1}
+                  onClick={() => setItemsOffset(o => o + itemsLimit)}
+                  disabled={currentPage >= totalPages}
                   className="px-2 py-1 rounded-md border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 >→</button>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex justify-between items-center pb-4">
+      <div className="flex items-center pb-4">
         <Button type="button" variant="ghost" onClick={onBack}>
           <ArrowLeft size={14} className="mr-1.5" />
           Back to Inventory
-        </Button>
-        <Button
-          type="button"
-          disabled={entries.length === 0 || saving}
-          onClick={handleSaveBadge}
-        >
-          {saving ? 'Saving…' : 'Save Badge'}
         </Button>
       </div>
 

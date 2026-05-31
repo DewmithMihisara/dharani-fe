@@ -118,82 +118,57 @@ function OrderDetailModal({ order, onClose }) {
                 <Field label="Department & Designation" value={o.departmentAndDesignation} />
               </SubGroup>
               <SubGroup title="Personal Information" cols={3}>
-                <Field label="Full Name"      value={o.fullName} />
-                <Field label="NIC Number"     value={o.nicNumber} />
-                <Field label="Date of Birth"  value={o.dateOfBirth} />
-                <Field label="Marital Status" value={o.maritalStatus} />
-                <Field label="Nationality"    value={o.nationality} />
+                <Field label="Title"                  value={o.title} />
+                <Field label="Surname"                value={o.surname} />
+                <Field label="Other Names"            value={o.otherNames} />
+                <Field label="Full Name w/ Initials"  value={o.fullNameWithInitials} />
+                <Field label="NIC Number"             value={o.nicNumber} />
+                <Field label="Date of Birth"          value={o.dateOfBirth} />
+                <Field label="Marital Status"         value={o.maritalStatus} />
                 {o.spouseName          && <Field label="Spouse Name"    value={o.spouseName} />}
                 {o.spouseContactNumber && <Field label="Spouse Contact" value={o.spouseContactNumber} />}
               </SubGroup>
               <SubGroup title="Contact Details" cols={3}>
                 <Field label="Mobile Number"   value={o.mobileNumber} />
                 <Field label="Landline Number" value={o.landlineNumber} />
-                <Field label="Email Address"   value={o.emailAddress} />
-              </SubGroup>
-              <SubGroup title="Financial" cols={3}>
-                <Field label="Expected Income" value={o.expectedIncome ? LKR(o.expectedIncome) : ''} />
-                <Field label="Payment Method"  value={o.paymentMethod} />
               </SubGroup>
               <SubGroup title="Address" cols={3}>
-                <Field label="Nearest Post Office" value={o.nearestPostOffice} />
-                <Field label="Main City"           value={o.mainCity} />
                 <div className="col-span-3 grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <AddressField label="Permanent Address" p1={o.permanentAddress1} p2={o.permanentAddress2} p3={o.permanentAddress3} p4={o.permanentAddress4} />
                   <AddressField label="Postal Address"    p1={o.postalAddress1}    p2={o.postalAddress2}    p3={o.postalAddress3}    p4={o.postalAddress4} />
-                  {o.routeDirectionDescription && (
-                    <div className="col-span-2"><Field label="Route / Directions" value={o.routeDirectionDescription} /></div>
-                  )}
                 </div>
               </SubGroup>
-              {o.otherNotes && (
-                <SubGroup title="Other" cols={1}>
-                  <Field label="Special Notes" value={o.otherNotes} />
-                </SubGroup>
-              )}
             </DetailSection>
 
             {/* Right */}
             <div className="flex flex-col gap-3">
-              <DetailSection title="Relative Details">
-                <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
-                  <Field label="Full Name"          value={o.relativeFullName} />
-                  <Field label="Relationship"       value={o.relativeRelationship} />
-                  <Field label="Mobile Number"      value={o.relativeMobileNumber} />
-                  <Field label="Landline Number"    value={o.relativeLandlineNumber} />
-                  <Field label="Alternative Number" value={o.relativeAlternativeNumber} />
-                  <div className="col-span-2">
-                    <AddressField label="Permanent Address" p1={o.relativePermanentAddress1} p2={o.relativePermanentAddress2} p3={o.relativePermanentAddress3} p4={o.relativePermanentAddress4} />
-                  </div>
-                </div>
-              </DetailSection>
               <DetailSection title="Guarantor 1">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <Field label="Employee ID"         value={o.g1_employeeId} />
-                  <Field label="Full Name"           value={o.g1_fullName} />
+                  <Field label="Title"               value={o.g1_title} />
+                  <Field label="Surname"             value={o.g1_surname} />
+                  <Field label="Other Names"         value={o.g1_otherNames} />
+                  <Field label="Full Name w/ Initials" value={o.g1_fullNameWithInitials} />
                   <Field label="NIC Number"          value={o.g1_nicNumber} />
                   <Field label="Mobile Number"       value={o.g1_mobileNumber} />
                   <Field label="Landline Number"     value={o.g1_landlineNumber} />
-                  <Field label="Nearest Post Office" value={o.g1_nearestPostOffice} />
-                  <Field label="Nearest Main City"   value={o.g1_nearestMainCity} />
-                  <div className="col-span-2 grid grid-cols-2 gap-x-5 gap-y-2.5">
+                  <div className="col-span-2">
                     <AddressField label="Permanent Address" p1={o.g1_permanentAddress1} p2={o.g1_permanentAddress2} p3={o.g1_permanentAddress3} p4={o.g1_permanentAddress4} />
-                    <AddressField label="Postal Address"    p1={o.g1_postalAddress1}    p2={o.g1_postalAddress2}    p3={o.g1_postalAddress3}    p4={o.g1_postalAddress4} />
                   </div>
                 </div>
               </DetailSection>
               <DetailSection title="Guarantor 2">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <Field label="Employee ID"         value={o.g2_employeeId} />
-                  <Field label="Full Name"           value={o.g2_fullName} />
+                  <Field label="Title"               value={o.g2_title} />
+                  <Field label="Surname"             value={o.g2_surname} />
+                  <Field label="Other Names"         value={o.g2_otherNames} />
+                  <Field label="Full Name w/ Initials" value={o.g2_fullNameWithInitials} />
                   <Field label="NIC Number"          value={o.g2_nicNumber} />
                   <Field label="Mobile Number"       value={o.g2_mobileNumber} />
                   <Field label="Landline Number"     value={o.g2_landlineNumber} />
-                  <Field label="Nearest Post Office" value={o.g2_nearestPostOffice} />
-                  <Field label="Nearest Main City"   value={o.g2_nearestMainCity} />
-                  <div className="col-span-2 grid grid-cols-2 gap-x-5 gap-y-2.5">
+                  <div className="col-span-2">
                     <AddressField label="Permanent Address" p1={o.g2_permanentAddress1} p2={o.g2_permanentAddress2} p3={o.g2_permanentAddress3} p4={o.g2_permanentAddress4} />
-                    <AddressField label="Postal Address"    p1={o.g2_postalAddress1}    p2={o.g2_postalAddress2}    p3={o.g2_postalAddress3}    p4={o.g2_postalAddress4} />
                   </div>
                 </div>
               </DetailSection>
