@@ -199,7 +199,7 @@ function OrderDetailModal({ order, onClose }) {
                             <td className="px-4 py-3 text-[#666]">{item.model}</td>
                             <td className="px-4 py-3 text-[#444]">{LKR(item.item_value)}</td>
                             <td className="px-4 py-3 text-[#555]">{item.duration_months} months</td>
-                            <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(Math.ceil(item.item_value / item.duration_months))}</td>
+                            <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(item['month' + item.duration_months] || 0)}</td>
                           </tr>
                           {item.remark && (
                             <tr className={rowCls}>
@@ -216,7 +216,7 @@ function OrderDetailModal({ order, onClose }) {
                         <td colSpan={2} className="px-4 py-3 text-xs font-semibold text-[#555] uppercase tracking-wide">Totals</td>
                         <td className="px-4 py-3 font-bold text-[#14213d]">{LKR(o.items.reduce((s, i) => s + i.item_value, 0))}</td>
                         <td />
-                        <td className="px-4 py-3 font-bold text-[#14213d]">{LKR(o.items.reduce((s, i) => s + Math.ceil(i.item_value / i.duration_months), 0))}</td>
+                        <td className="px-4 py-3 font-bold text-[#14213d]">{LKR(o.items.reduce((s, i) => s + (Number(i['month' + i.duration_months]) || 0), 0))}</td>
                       </tr>
                     </tfoot>
                   )}

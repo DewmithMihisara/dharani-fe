@@ -1,56 +1,75 @@
-import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
-import FormSection from '../components/FormSection'
+import { useCallback, useEffect, useState } from 'react'
+import { deleteBadgeItem, getCategories, getItemsByBadge, getItemsByCategory, getModelsByItem, saveItem } from '../api/inventoryApi'
 import Button from '../components/Button'
-import { saveItem, getItemsByBadge, deleteBadgeItem, getCategories, getItemsByCategory, getModelsByItem } from '../api/inventoryApi'
 import Combobox from '../components/Combobox'
+import FormSection from '../components/FormSection'
 
-function LKR(n) { return `LKR ${Number(n).toLocaleString('en-LK')}` }
+function LKR(n) {
+  return `LKR ${Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 function round2(n) { return Math.round(n * 100) / 100 }
 function num(v) { return Number(v) || 0 }
+
+function fmtInput(v) {
+  if (v === '' || v == null) return ''
+  const [int, dec] = String(v).split('.')
+  const n = parseInt(int || '0', 10)
+  if (isNaN(n)) return v
+  const formatted = n.toLocaleString('en-LK')
+  return dec !== undefined ? `${formatted}.${dec}` : formatted
+}
+
+function parseInput(v) {
+  const raw = String(v).replace(/,/g, '').replace(/[^0-9.]/g, '')
+  const dot = raw.indexOf('.')
+  return dot !== -1 ? raw.slice(0, dot + 3) : raw
+}
 
 const EMPTY = {
   category: '', item: '', model: '', modelId: null, size: '', name: '',
   transferPrice: '',
   adminCostValue: '', adminCostPct: '',
-  spValue: '',        spPct: '',
+  spValue: '', spPct: '',
   transportValue: '', transportPct: '',
-  taxPct: '0',       taxValue: '',
-  pricePct: '',      price: '',
+  taxPct: '18', taxValue: '',
+  pricePct: '', price: '',
   m6: '', m12: '', m18: '', m24: '',
   m6Pct: '18.562', m12Pct: '10.146', m18Pct: '7.374', m24Pct: '6.011',
 }
 
-const base   = 'w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none transition-colors duration-100'
-const inp    = `${base} border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb] focus:border-[#14213d]`
+const base = 'w-full px-3 py-2 rounded-lg border text-xs focus:outline-none transition-colors duration-100'
+const inp = `${base} border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb] focus:border-[#14213d]`
 const rdonly = `${base} border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none`
-const dis    = `${base} border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
+const dis = `${base} border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
 
-const inpSm    = 'w-full px-2 py-1 rounded border text-xs focus:outline-none transition-colors border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb] focus:border-[#14213d]'
-const rdonlySm = 'w-full px-2 py-1 rounded border text-xs border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none'
-const disSm    = 'w-full px-2 py-1 rounded border text-xs border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed'
+const inpSm = 'w-full px-2 py-0.5 rounded border text-xs focus:outline-none transition-colors border-[#e5e5e5] bg-white text-[#000] placeholder-[#bbb] focus:border-[#14213d]'
+const rdonlySm = 'w-full px-2 py-0.5 rounded border text-xs border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none'
+const disSm = 'w-full px-2 py-0.5 rounded border text-xs border-[#eee] bg-[#fafafa] text-[#bbb] cursor-not-allowed'
 const rdonlyXs = 'w-full px-1.5 py-0.5 rounded border text-[10px] border-[#e5e5e5] bg-[#f5f5f5] font-semibold text-[#14213d] cursor-default select-none'
 
-const iconBtn   = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
+const iconBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
 const deleteBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-red-600 hover:bg-red-50 cursor-pointer'
 
 const TABLE_HEADERS = [
-  'Category','Item','Model','Name','Size',
-  'Transfer Price','Admin Cost','S&P','Transport',
-  'Total Cost','Tax%','Price','6M','12M','18M','24M','Actions',
+  'Category', 'Item', 'Model', 'Name', 'Size',
+  'Transfer Price', 'Admin Cost', 'S&P', 'Transport',
+  'Total Cost', 'Tax%', 'Price', '6M', '12M', '18M', '24M', 'Actions',
 ]
 
 function calcPrice(prev, overrides = {}) {
-  const f  = { ...prev, ...overrides }
+  const f = { ...prev, ...overrides }
   const tc = num(f.transferPrice) + num(f.adminCostValue) + num(f.spValue) + num(f.transportValue)
-  return String(round2(tc * (1 + num(f.pricePct) / 100)))
+  const pct = num(f.pricePct)
+  if (pct >= 100) return String(tc)
+  return String(round2(tc / (1 - pct / 100)))
 }
 
 function recalcAll(next) {
-  const price    = calcPrice(next)
-  const taxVal   = round2(num(price) * num(next.taxPct) / 100)
+  const price = calcPrice(next)
+  const taxVal = round2(num(price) * num(next.taxPct) / 100)
   const taxValue = taxVal > 0 ? String(taxVal) : ''
-  const pvat     = round2(num(price) + taxVal)
+  const pvat = round2(num(price) + taxVal)
   return { ...next, price, taxValue, ...calcInstallments(String(pvat), next) }
 }
 
@@ -58,7 +77,7 @@ function calcInstallments(priceStr, pcts) {
   const p = num(priceStr)
   if (p <= 0) return { m6: '', m12: '', m18: '', m24: '' }
   return {
-    m6:  String(Math.ceil(p * num(pcts.m6Pct)  / 100)),
+    m6: String(Math.ceil(p * num(pcts.m6Pct) / 100)),
     m12: String(Math.ceil(p * num(pcts.m12Pct) / 100)),
     m18: String(Math.ceil(p * num(pcts.m18Pct) / 100)),
     m24: String(Math.ceil(p * num(pcts.m24Pct) / 100)),
@@ -67,7 +86,7 @@ function calcInstallments(priceStr, pcts) {
 
 function PricingRowSm({ label, required, children }) {
   return (
-    <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 border-b border-[#f0f0f0] last:border-0">
+    <div className="grid grid-cols-[86px_1fr_50px] gap-1.5 items-center py-1 border-b border-[#f0f0f0] last:border-0">
       <span className="text-xs font-medium text-[#444] truncate">
         {label}{required && <span className="text-[#fca311] ml-0.5">*</span>}
       </span>
@@ -91,57 +110,51 @@ function CompactSection({ number, title, children }) {
 }
 
 function apiEntryToForm(e) {
-  const priceVal = num(e.price)
-  const taxAmt   = num(e.taxValue)
-  const pvat     = priceVal + taxAmt
-  const tc       = num(e.transferPrice) + num(e.adminCost) + num(e.salesAndPromotion) + num(e.transport)
-  const pricePct = tc > 0 && priceVal > 0 ? String(round2((priceVal / tc - 1) * 100)) : ''
+  const taxAmt = num(e.taxValue)
+  const pvat = num(e.price)                    // stored as price_before_vat + tax
+  const priceVal = round2(pvat - taxAmt)           // price before VAT (what form.price holds)
+  const tc = num(e.transferPrice) + num(e.adminCost) + num(e.salesAndPromotion) + num(e.transport)
+  const pricePct = tc > 0 && priceVal > tc ? String(round2((1 - tc / priceVal) * 100)) : ''
   return {
-    category:       e.category      ?? '',
-    item:           e.itemName      ?? '',
-    model:          e.modelName     ?? '',
-    modelId:        e.modelId       ?? null,
-    size:           e.size          ?? '',
-    name:           e.name          ?? '',
-    transferPrice:  String(e.transferPrice  ?? ''),
-    adminCostValue: String(e.adminCost      ?? ''),
-    adminCostPct:   String(e.adminCostPct   ?? ''),
-    spValue:        String(e.salesAndPromotion      ?? ''),
-    spPct:          String(e.salesAndPromotionPct   ?? ''),
-    transportValue: String(e.transport      ?? ''),
-    transportPct:   String(e.transportPct   ?? ''),
-    taxPct:         String(e.taxPct  ?? '0'),
-    taxValue:       String(taxAmt),
+    category: e.category ?? '',
+    item: e.itemName ?? '',
+    model: e.modelName ?? '',
+    modelId: e.modelId ?? null,
+    size: e.size ?? '',
+    name: e.name ?? '',
+    transferPrice: String(e.transferPrice ?? ''),
+    adminCostValue: String(e.adminCost ?? ''),
+    adminCostPct: String(e.adminCostPct ?? ''),
+    spValue: String(e.salesAndPromotion ?? ''),
+    spPct: String(e.salesAndPromotionPct ?? ''),
+    transportValue: String(e.transport ?? ''),
+    transportPct: String(e.transportPct ?? ''),
+    taxPct: String(e.taxPct ?? '0'),
+    taxValue: String(taxAmt),
     pricePct,
-    price:          String(priceVal),
-    m6:  String(e.month6  ?? ''),
-    m12: String(e.month12 ?? ''),
-    m18: String(e.month18 ?? ''),
-    m24: String(e.month24 ?? ''),
-    m6Pct:  pvat > 0 && e.month6  ? String(round2(num(e.month6)  / pvat * 100)) : '18.562',
-    m12Pct: pvat > 0 && e.month12 ? String(round2(num(e.month12) / pvat * 100)) : '10.146',
-    m18Pct: pvat > 0 && e.month18 ? String(round2(num(e.month18) / pvat * 100)) : '7.374',
-    m24Pct: pvat > 0 && e.month24 ? String(round2(num(e.month24) / pvat * 100)) : '6.011',
+    price: String(priceVal),
+    m6: '', m12: '', m18: '', m24: '',
+    m6Pct: '18.562', m12Pct: '10.146', m18Pct: '7.374', m24Pct: '6.011',
   }
 }
 
 export default function AddBadgeForm({ badge, onBack, onSave }) {
-  const [form,      setForm]      = useState(EMPTY)
-  const [editItemId,       setEditItemId]       = useState(null)
-  const [saving,           setSaving]           = useState(false)
-  const [categoryOptions,  setCategoryOptions]  = useState([])
-  const [itemOptions,      setItemOptions]      = useState([])
-  const [modelOptions,     setModelOptions]     = useState([])
-  const [selectedCatId,    setSelectedCatId]    = useState(null)
-  const [selectedItemId,   setSelectedItemId]   = useState(null)
+  const [form, setForm] = useState(EMPTY)
+  const [editItemId, setEditItemId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [itemOptions, setItemOptions] = useState([])
+  const [modelOptions, setModelOptions] = useState([])
+  const [selectedCatId, setSelectedCatId] = useState(null)
+  const [selectedItemId, setSelectedItemId] = useState(null)
 
   // Server-driven items table state
   const [currentBadgeId, setCurrentBadgeId] = useState(badge?.id ?? null)
-  const [items,          setItems]          = useState([])
-  const [itemsTotal,     setItemsTotal]     = useState(0)
-  const [itemsOffset,    setItemsOffset]    = useState(0)
-  const [itemsLimit,     setItemsLimit]     = useState(10)
-  const [itemsLoading,   setItemsLoading]   = useState(false)
+  const [items, setItems] = useState([])
+  const [itemsTotal, setItemsTotal] = useState(0)
+  const [itemsOffset, setItemsOffset] = useState(0)
+  const [itemsLimit, setItemsLimit] = useState(10)
+  const [itemsLoading, setItemsLoading] = useState(false)
 
   const token = localStorage.getItem('accessToken')
 
@@ -171,17 +184,17 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
   }, [])
 
   // ── Computed ─────────────────────────────────────────────────────────────
-  const tp        = num(form.transferPrice)
-  const adminVal  = num(form.adminCostValue)
-  const spVal     = num(form.spValue)
+  const tp = num(form.transferPrice)
+  const adminVal = num(form.adminCostValue)
+  const spVal = num(form.spValue)
   const transpVal = num(form.transportValue)
   const totalCost = tp + adminVal + spVal + transpVal
   const enabled = tp > 0
 
-  const totalPages  = Math.max(1, Math.ceil(itemsTotal / itemsLimit))
+  const totalPages = Math.max(1, Math.ceil(itemsTotal / itemsLimit))
   const currentPage = Math.floor(itemsOffset / itemsLimit) + 1
-  const fromItem    = itemsTotal === 0 ? 0 : itemsOffset + 1
-  const toItem      = Math.min(itemsOffset + itemsLimit, itemsTotal)
+  const fromItem = itemsTotal === 0 ? 0 : itemsOffset + 1
+  const toItem = Math.min(itemsOffset + itemsLimit, itemsTotal)
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function setField(key) {
@@ -189,16 +202,22 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
   }
 
   function handleTransferPrice(e) {
-    const val = e.target.value
-    setForm(prev => recalcAll({ ...prev, transferPrice: val }))
+    const val = parseInput(e.target.value)
+    setForm(prev => {
+      const base = num(val)
+      const adminCostValue = prev.adminCostPct ? String(round2(num(prev.adminCostPct) / 100 * base)) : ''
+      const spValue = prev.spPct ? String(round2(num(prev.spPct) / 100 * base)) : ''
+      const transportValue = prev.transportPct ? String(round2(num(prev.transportPct) / 100 * base)) : ''
+      return recalcAll({ ...prev, transferPrice: val, adminCostValue, spValue, transportValue })
+    })
   }
 
   function handleCostValue(valueKey, pctKey) {
     return e => {
-      const val = e.target.value
+      const val = parseInput(e.target.value)
       setForm(prev => {
         const base = num(prev.transferPrice)
-        const pct  = base > 0 ? String(round2(num(val) / base * 100)) : ''
+        const pct = base > 0 ? String(round2(num(val) / base * 100)) : ''
         return recalcAll({ ...prev, [valueKey]: val, [pctKey]: pct })
       })
     }
@@ -209,7 +228,7 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
       const pct = e.target.value
       setForm(prev => {
         const base = num(prev.transferPrice)
-        const val  = String(round2(num(pct) / 100 * base))
+        const val = String(round2(num(pct) / 100 * base))
         return recalcAll({ ...prev, [pctKey]: pct, [valueKey]: val })
       })
     }
@@ -218,18 +237,18 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
   function handleTaxPct(e) {
     const pct = e.target.value
     setForm(prev => {
-      const taxVal   = round2(num(prev.price) * num(pct) / 100)
+      const taxVal = round2(num(prev.price) * num(pct) / 100)
       const taxValue = taxVal > 0 ? String(taxVal) : ''
-      const next     = { ...prev, taxPct: pct, taxValue }
-      const pvat     = round2(num(prev.price) + taxVal)
+      const next = { ...prev, taxPct: pct, taxValue }
+      const pvat = round2(num(prev.price) + taxVal)
       return { ...next, ...calcInstallments(String(pvat), next) }
     })
   }
 
   function handleTaxValue(e) {
-    const val = e.target.value
+    const val = parseInput(e.target.value)
     setForm(prev => {
-      const pct  = num(prev.price) > 0 ? String(round2(num(val) / num(prev.price) * 100)) : '0'
+      const pct = num(prev.price) > 0 ? String(round2(num(val) / num(prev.price) * 100)) : '0'
       const next = { ...prev, taxValue: val, taxPct: pct }
       const pvat = round2(num(prev.price) + num(val))
       return { ...next, ...calcInstallments(String(pvat), next) }
@@ -242,14 +261,14 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
   }
 
   function handlePrice(e) {
-    const val = e.target.value
+    const val = parseInput(e.target.value)
     setForm(prev => {
-      const tc       = num(prev.transferPrice) + num(prev.adminCostValue) + num(prev.spValue) + num(prev.transportValue)
-      const pct      = tc > 0 ? String(round2((num(val) / tc - 1) * 100)) : ''
-      const taxVal   = round2(num(val) * num(prev.taxPct) / 100)
+      const tc = num(prev.transferPrice) + num(prev.adminCostValue) + num(prev.spValue) + num(prev.transportValue)
+      const pct = tc > 0 && num(val) > tc ? String(round2((1 - tc / num(val)) * 100)) : ''
+      const taxVal = round2(num(val) * num(prev.taxPct) / 100)
       const taxValue = taxVal > 0 ? String(taxVal) : ''
-      const next     = { ...prev, price: val, pricePct: pct, taxValue }
-      const pvat     = round2(num(val) + taxVal)
+      const next = { ...prev, price: val, pricePct: pct, taxValue }
+      const pvat = round2(num(val) + taxVal)
       return { ...next, ...calcInstallments(String(pvat), next) }
     })
   }
@@ -297,24 +316,24 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
       const dto = {
         badgeId: currentBadgeId,
         item: {
-          id:                   editItemId,
-          modelId:              form.modelId ?? null,
-          name:                 form.name || null,
-          category:             form.category,
-          itemName:             form.item,
-          modelName:            form.model,
-          size:                 form.size,
-          transferPrice:        num(form.transferPrice),
-          adminCost:            num(form.adminCostValue),
-          adminCostPct:         num(form.adminCostPct),
-          salesAndPromotion:    num(form.spValue),
+          id: editItemId,
+          modelId: form.modelId ?? null,
+          name: form.name || null,
+          category: form.category,
+          itemName: form.item,
+          modelName: form.model,
+          size: form.size,
+          transferPrice: num(form.transferPrice),
+          adminCost: num(form.adminCostValue),
+          adminCostPct: num(form.adminCostPct),
+          salesAndPromotion: num(form.spValue),
           salesAndPromotionPct: num(form.spPct),
-          transport:            num(form.transportValue),
-          transportPct:         num(form.transportPct),
+          transport: num(form.transportValue),
+          transportPct: num(form.transportPct),
           totalCost,
-          taxPct:               num(form.taxPct),
-          taxValue:             num(form.taxValue),
-          price:                round2(num(form.price) + num(form.taxValue)),
+          taxPct: num(form.taxPct),
+          taxValue: num(form.taxValue),
+          price: round2(num(form.price) + num(form.taxValue)),
           month6:  form.m6  || null,
           month12: form.m12 || null,
           month18: form.m18 || null,
@@ -342,7 +361,9 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
 
   function handleEdit(item) {
     setEditItemId(item.id)
-    setForm(apiEntryToForm(item))
+    const mapped = apiEntryToForm(item)
+    const pvat = round2(num(mapped.price) + num(mapped.taxValue))
+    setForm({ ...mapped, ...calcInstallments(String(pvat), mapped) })
     setSelectedCatId(null)
     setSelectedItemId(null)
     setItemOptions([])
@@ -381,14 +402,14 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
           Inventory
         </button>
         <span className="text-[#ccc] text-sm">/</span>
-        <h1 className="text-xl font-semibold text-[#14213d]">
+        <h1 className="text-lg font-semibold text-[#14213d]">
           {badge ? `Edit Badge ${badge.badgeNumber}` : currentBadgeId ? 'Add Badge' : 'Add Badge'}
         </h1>
       </div>
 
       {/* ── Section 1: Item Details ── */}
       <FormSection number="1" title="Item Details">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-[#222]">
               Product Category<span className="text-[#fca311] ml-0.5">*</span>
@@ -458,96 +479,112 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
         {/* Section 2: Pricing */}
         <div className="col-span-3">
           <CompactSection number="2" title="Pricing">
-            <div className="grid grid-cols-[110px_1fr_64px] gap-2 mb-1">
-              <div />
-              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
-              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%</p>
-            </div>
+            <div className="grid grid-cols-2 divide-x divide-[#e5e5e5]">
 
-            <PricingRowSm label="Transfer Price" required>
-              <input
-                type="number" min="0"
-                value={form.transferPrice} onChange={handleTransferPrice}
-                placeholder="0" className={inp}
-              />
-              <div />
-            </PricingRowSm>
+              {/* LEFT — input costs */}
+              <div className="pr-4">
+                <div className="grid grid-cols-[86px_1fr_50px] gap-1.5 mb-1">
+                  <div />
+                  <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
+                  <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%</p>
+                </div>
 
-            {[
-              { label: 'Admin Cost',   vk: 'adminCostValue', pk: 'adminCostPct' },
-              { label: 'S&P',          vk: 'spValue',        pk: 'spPct'        },
-              { label: 'Transport',    vk: 'transportValue', pk: 'transportPct' },
-            ].map(({ label, vk, pk }) => (
-              <PricingRowSm key={vk} label={label}>
-                <input
-                  type="number" min="0"
-                  value={form[vk]}
-                  onChange={handleCostValue(vk, pk)}
-                  placeholder="0"
-                  disabled={!enabled}
-                  className={enabled ? inp : dis}
-                />
-                <input
-                  type="number" min="0"
-                  value={form[pk]}
-                  onChange={handleCostPct(pk, vk)}
-                  placeholder="0"
-                  disabled={!enabled}
-                  className={enabled ? inp : dis}
-                />
-              </PricingRowSm>
-            ))}
+                <PricingRowSm label="Transfer Price" required>
+                  <input
+                    type="text"
+                    value={fmtInput(form.transferPrice)} onChange={handleTransferPrice}
+                    placeholder="0" className={inp}
+                  />
+                  <div />
+                </PricingRowSm>
 
-            {/* Total Cost — read-only */}
-            <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 mt-1 border-t-2 border-[#e5e5e5]">
-              <span className="text-xs font-semibold text-[#222]">Total Cost</span>
-              <div className={rdonly}>{LKR(totalCost)}</div>
-              <div />
-            </div>
+                {[
+                  { label: 'Admin Cost', vk: 'adminCostValue', pk: 'adminCostPct' },
+                  { label: 'S&P', vk: 'spValue', pk: 'spPct' },
+                  { label: 'Transport', vk: 'transportValue', pk: 'transportPct' },
+                ].map(({ label, vk, pk }) => (
+                  <PricingRowSm key={vk} label={label}>
+                    <input
+                      type="text"
+                      value={fmtInput(form[vk])}
+                      onChange={handleCostValue(vk, pk)}
+                      placeholder="0"
+                      disabled={!enabled}
+                      className={enabled ? inp : dis}
+                    />
+                    <input
+                      type="number" min="0"
+                      value={form[pk]}
+                      onChange={handleCostPct(pk, vk)}
+                      placeholder="0"
+                      disabled={!enabled}
+                      className={enabled ? inp : dis}
+                    />
+                  </PricingRowSm>
+                ))}
+              </div>
 
-            <PricingRowSm label="Price">
-              <input
-                type="number" min="0"
-                value={form.price}
-                onChange={handlePrice}
-                placeholder="0"
-                disabled={!enabled}
-                className={enabled ? inp : dis}
-              />
-              <input
-                type="number" min="0"
-                value={form.pricePct}
-                onChange={handlePricePct}
-                placeholder="0"
-                disabled={!enabled}
-                className={enabled ? inp : dis}
-              />
-            </PricingRowSm>
+              {/* RIGHT — calculated totals */}
+              <div className="pl-4">
+                <div className="grid grid-cols-[86px_1fr_50px] gap-1.5 mb-1">
+                  <div />
+                  <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">Value (LKR)</p>
+                  <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%</p>
+                </div>
 
-            <PricingRowSm label="VAT">
-              <input
-                type="number" min="0"
-                value={form.taxValue}
-                onChange={handleTaxValue}
-                placeholder="0"
-                disabled={!enabled}
-                className={enabled ? inp : dis}
-              />
-              <input
-                type="number" min="0" max="99"
-                value={form.taxPct}
-                onChange={handleTaxPct}
-                placeholder="0"
-                disabled={!enabled}
-                className={enabled ? inp : dis}
-              />
-            </PricingRowSm>
+                {/* Total Cost — read-only */}
+                <div className="grid grid-cols-[86px_1fr_50px] gap-1.5 items-center py-1 border-b border-[#f0f0f0]">
+                  <span className="text-xs font-semibold text-[#222]">Total Cost</span>
+                  <div className={rdonly}>{LKR(totalCost)}</div>
+                  <div />
+                </div>
 
-            {/* Price with VAT — read-only */}
-            <div className="grid grid-cols-[110px_1fr_64px] gap-2 items-center py-1 mt-1 border-t-2 border-[#e5e5e5]">
-              <span className="text-xs font-semibold text-[#222]">Price with VAT</span>
-              <div className={rdonly}>{LKR(round2(num(form.price) + num(form.taxValue)))}</div>
-              <div />
+                <PricingRowSm label="Price">
+                  <input
+                    type="text"
+                    value={fmtInput(form.price)}
+                    onChange={handlePrice}
+                    placeholder="0"
+                    disabled={!enabled}
+                    className={enabled ? inp : dis}
+                  />
+                  <input
+                    type="number" min="0"
+                    value={form.pricePct}
+                    onChange={handlePricePct}
+                    placeholder="0"
+                    disabled={!enabled}
+                    className={enabled ? inp : dis}
+                  />
+                </PricingRowSm>
+
+                <PricingRowSm label="VAT">
+                  <input
+                    type="text"
+                    value={fmtInput(form.taxValue)}
+                    onChange={handleTaxValue}
+                    placeholder="0"
+                    disabled={!enabled}
+                    className={enabled ? inp : dis}
+                  />
+                  <input
+                    type="number" min="0" max="99"
+                    value={form.taxPct}
+                    onChange={handleTaxPct}
+                    placeholder="0"
+                    disabled={!enabled}
+                    className={enabled ? inp : dis}
+                  />
+                </PricingRowSm>
+
+                {/* Price with VAT — read-only */}
+                <div className="grid grid-cols-[86px_1fr_50px] gap-1.5 items-center py-1 mt-1 border-t-2 border-[#e5e5e5]">
+                  <span className="text-xs font-semibold text-[#222]">Price with VAT</span>
+                  <div className={rdonly}>{LKR(round2(num(form.price) + num(form.taxValue)))}</div>
+                  <div />
+                </div>
+              </div>
+
             </div>
           </CompactSection>
         </div>
@@ -555,21 +592,19 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
         {/* Section 3: Installments — read-only */}
         <div className="col-span-1 flex flex-col gap-3">
           <CompactSection number="3" title="Installments">
-            <div className="grid grid-cols-[28px_1fr_1fr] gap-1 mb-1">
+            <div className="grid grid-cols-[28px_1fr] gap-1 mb-1">
               <div />
               <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">LKR</p>
-              <p className="text-[10px] font-semibold text-[#888] uppercase tracking-wider">%VAT</p>
             </div>
             {[
-              { label: '6M',  vk: 'm6',  pk: 'm6Pct'  },
-              { label: '12M', vk: 'm12', pk: 'm12Pct' },
-              { label: '18M', vk: 'm18', pk: 'm18Pct' },
-              { label: '24M', vk: 'm24', pk: 'm24Pct' },
-            ].map(({ label, vk, pk }) => (
-              <div key={vk} className="grid grid-cols-[28px_1fr_1fr] gap-1 items-center py-1 border-b border-[#f0f0f0] last:border-0">
+              { label: '6M',  vk: 'm6'  },
+              { label: '12M', vk: 'm12' },
+              { label: '18M', vk: 'm18' },
+              { label: '24M', vk: 'm24' },
+            ].map(({ label, vk }) => (
+              <div key={vk} className="grid grid-cols-[28px_1fr] gap-1 items-center py-1 border-b border-[#f0f0f0] last:border-0">
                 <span className="text-[10px] font-medium text-[#444]">{label}</span>
-                <input readOnly tabIndex={-1} value={form[vk]} className={rdonly} />
-                <input readOnly tabIndex={-1} value={form[pk]} className={rdonly} />
+                <input readOnly tabIndex={-1} value={fmtInput(form[vk])} className={rdonly} />
               </div>
             ))}
           </CompactSection>
@@ -606,9 +641,8 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
                 ) : items.map((e, i) => (
                   <tr
                     key={e.id}
-                    className={`border-t border-[#ebebeb] hover:bg-[#f5f5f5] transition-colors duration-100 ${
-                      e.id === editItemId ? 'bg-[#fffbec]' : i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
-                    }`}
+                    className={`border-t border-[#ebebeb] hover:bg-[#f5f5f5] transition-colors duration-100 ${e.id === editItemId ? 'bg-[#fffbec]' : i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
+                      }`}
                   >
                     <td className="px-4 py-3 text-[#555]">{e.category}</td>
                     <td className="px-4 py-3 font-semibold text-[#14213d] whitespace-nowrap">{e.itemName}</td>
@@ -628,13 +662,13 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
                     <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(e.totalCost)}</td>
                     <td className="px-4 py-3 text-[#444]">{e.taxPct}%</td>
                     <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(e.price)}</td>
-                    <td className="px-4 py-3 text-[#555]">{e.month6  || '—'}</td>
-                    <td className="px-4 py-3 text-[#555]">{e.month12 || '—'}</td>
-                    <td className="px-4 py-3 text-[#555]">{e.month18 || '—'}</td>
-                    <td className="px-4 py-3 text-[#555]">{e.month24 || '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month6  != null ? LKR(e.month6)  : '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month12 != null ? LKR(e.month12) : '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month18 != null ? LKR(e.month18) : '—'}</td>
+                    <td className="px-4 py-3 text-[#555]">{e.month24 != null ? LKR(e.month24) : '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button className={iconBtn}   title="Edit"   onClick={() => handleEdit(e)}><Pencil size={15} /></button>
+                        <button className={iconBtn} title="Edit" onClick={() => handleEdit(e)}><Pencil size={15} /></button>
                         <button className={deleteBtn} title="Delete" onClick={() => handleDelete(e.id)}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -677,14 +711,6 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
           </div>
         </div>
       )}
-
-      {/* Footer */}
-      <div className="flex items-center pb-4">
-        <Button type="button" variant="ghost" onClick={onBack}>
-          <ArrowLeft size={14} className="mr-1.5" />
-          Back to Inventory
-        </Button>
-      </div>
 
     </div>
   )

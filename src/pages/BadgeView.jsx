@@ -65,11 +65,11 @@ export default function BadgeView({ badge, onClose, onApprove }) {
           {/* Header */}
           <div className="bg-[#14213d] rounded-t-2xl px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-white font-bold text-base">Badge {badge.badgeNumber}</span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${HEADER_CHIP[badge.status]}`}>
+              <span className="text-white font-bold text-sm">Badge {badge.badgeNumber}</span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${HEADER_CHIP[badge.status]}`}>
                 {badge.status}
               </span>
-              <span className="text-[#6b7a99] text-xs">
+              <span className="text-[#6b7a99] text-[10px]">
                 {total} item{total !== 1 ? 's' : ''}
               </span>
             </div>
@@ -93,9 +93,9 @@ export default function BadgeView({ badge, onClose, onApprove }) {
           ) : (
             <>
               <div className="overflow-auto max-h-[60vh]">
-                <table className="min-w-max w-full text-sm border-collapse">
+                <table className="min-w-max w-full text-xs border-collapse">
                   <thead>
-                    <tr className="text-white text-xs">
+                    <tr className="text-white text-[10px]">
                       <th className={`${th} w-10 text-center`}>#</th>
                       <th className={th}>Category</th>
                       <th className={th}>Item</th>

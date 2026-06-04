@@ -208,12 +208,12 @@ function buildPayload(form, items, id = null) {
   }
 }
 
-const inputCls = 'w-full px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
+const inputCls = 'w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
 
 function SubGroup({ label, children }) {
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs font-semibold text-[#aaa] uppercase tracking-widest">{label}</p>
+    <div className="flex flex-col gap-2">
+      <p className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">{label}</p>
       {children}
     </div>
   )
@@ -223,16 +223,16 @@ function SectionDivider() {
   return <div className="border-t border-[#f0f0f0]" />
 }
 
-function AddressGroup({ label, baseKey, form, setForm }) {
+function AddressGroup({ label, baseKey, form, setForm, cols = 4 }) {
   const val = n => form[`${baseKey}${n}`] ?? ''
   const onChange = n => e => setForm(prev => ({ ...prev, [`${baseKey}${n}`]: e.target.value }))
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-sm font-medium text-[#222]">
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium text-[#222]">
         {label}
-        <span className="text-xs text-[#aaa] font-normal ml-2">— 1st &amp; 4th fields are required</span>
+        <span className="text-[10px] text-[#aaa] font-normal ml-2">— 1st &amp; 4th fields are required</span>
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid grid-cols-${cols} gap-2`}>
         <input value={val(1)} onChange={onChange(1)} required placeholder="No. & Street Name *" className={inputCls} />
         <input value={val(2)} onChange={onChange(2)} placeholder="Village / Area"               className={inputCls} />
         <input value={val(3)} onChange={onChange(3)} placeholder="City / Town"                  className={inputCls} />
@@ -248,7 +248,13 @@ function ItemsGrid({ items, setItems }) {
   const [selCategory,    setSelCategory]    = useState('')
   const [selItem,        setSelItem]        = useState('')
   const [selModelId,     setSelModelId]     = useState('')
+  const [selSize,        setSelSize]        = useState('')
   const [addError,       setAddError]       = useState('')
+  const [sharedDuration, setSharedDuration] = useState(24)
+
+  useEffect(() => {
+    if (items.length > 0 && items[0].duration_months) setSharedDuration(items[0].duration_months)
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
@@ -265,41 +271,68 @@ function ItemsGrid({ items, setItems }) {
       if (i.monthly_rental != null) return i
       const entry = catalogue.find(c => c.modelBadgeId === i.modelBadgeId)
       if (!entry) return i
-      return { ...i, monthly_rental: entry['month' + i.duration_months] ?? 0 }
+      return {
+        ...i,
+        month6: entry.month6, month12: entry.month12,
+        month18: entry.month18, month24: entry.month24,
+        monthly_rental: entry['month' + i.duration_months] ?? 0,
+      }
     }))
   }, [catalogue])
 
   const categories     = [...new Set(catalogue.map(c => c.category))]
   const filteredItems  = [...new Set(catalogue.filter(c => c.category === selCategory).map(c => c.itemName))]
-  const filteredModels = catalogue.filter(c => c.category === selCategory && c.itemName === selItem)
+  const filteredModels = [...new Map(
+    catalogue
+      .filter(c => c.category === selCategory && c.itemName === selItem)
+      .map(m => [m.modelId, m])
+  ).values()]
 
-  function handleCategorySelect(e) { setSelCategory(e.target.value); setSelItem(''); setSelModelId(''); setAddError('') }
-  function handleItemSelect(e)     { setSelItem(e.target.value); setSelModelId(''); setAddError('') }
-  function handleModelSelect(e)    { setSelModelId(e.target.value); setAddError('') }
+  const selectedModelEntries = catalogue.filter(
+    c => c.category === selCategory && c.itemName === selItem && c.modelId === Number(selModelId)
+  )
+  const filteredSizes    = selectedModelEntries.map(e => e.size).filter(Boolean)
+  const showSizeDropdown = filteredSizes.length > 1
+
+  function handleCategorySelect(e) { setSelCategory(e.target.value); setSelItem(''); setSelModelId(''); setSelSize(''); setAddError('') }
+  function handleItemSelect(e)     { setSelItem(e.target.value); setSelModelId(''); setSelSize(''); setAddError('') }
+  function handleModelSelect(e)    { setSelModelId(e.target.value); setSelSize(''); setAddError('') }
+  function handleSizeSelect(e)     { setSelSize(e.target.value); setAddError('') }
 
   function handleAdd() {
-    const entry = catalogue.find(c => c.modelId === Number(selModelId))
+    let entry
+    if (showSizeDropdown) {
+      if (!selSize) { setAddError('Please select a size.'); return }
+      entry = catalogue.find(c => c.modelId === Number(selModelId) && c.size === selSize)
+    } else {
+      entry = selectedModelEntries[0]
+    }
     if (!entry) { setAddError('Please select a model.'); return }
-    if (items.find(i => i.modelId === entry.modelId)) { setAddError('This item is already added.'); return }
-    setItems(prev => [...prev, { ...entry, duration_months: 24, monthly_rental: entry.month24 ?? 0, remark: '' }])
-    setSelCategory(''); setSelItem(''); setSelModelId(''); setAddError('')
+    if (items.find(i => i.modelBadgeId === entry.modelBadgeId)) { setAddError('This item is already added.'); return }
+    setItems(prev => [...prev, {
+      ...entry,
+      duration_months: sharedDuration,
+      monthly_rental: entry['month' + sharedDuration] ?? 0,
+      remark: '',
+    }])
+    setSelCategory(''); setSelItem(''); setSelModelId(''); setSelSize(''); setAddError('')
   }
 
-  function handleDurationChange(modelBadgeId, months) {
-    const entry = catalogue.find(c => c.modelBadgeId === modelBadgeId)
-    const monthly_rental = entry ? (entry['month' + months] ?? 0) : 0
-    setItems(prev => prev.map(i =>
-      i.modelBadgeId === modelBadgeId
-        ? { ...i, duration_months: Number(months), monthly_rental }
-        : i
-    ))
+  function handleDurationChange(months) {
+    const num = Number(months)
+    setSharedDuration(num)
+    setItems(prev => prev.map(i => ({
+      ...i,
+      duration_months: num,
+      monthly_rental: i['month' + num] ?? 0,
+    })))
   }
 
-  function handleRemarkChange(modelId, text) {
-    setItems(prev => prev.map(i => i.modelId === modelId ? { ...i, remark: text } : i))
+  function handleRemarkChange(modelBadgeId, text) {
+    setItems(prev => prev.map(i => i.modelBadgeId === modelBadgeId ? { ...i, remark: text } : i))
   }
 
-  const selBase    = 'w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none transition-colors duration-100'
+  const selBase    = 'w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none transition-colors duration-100'
   const selEnabled = `${selBase} border-[#e5e5e5] bg-white text-[#000] focus:border-[#14213d] cursor-pointer`
   const selDis     = `${selBase} border-[#e5e5e5] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
 
@@ -309,7 +342,7 @@ function ItemsGrid({ items, setItems }) {
         <p className="text-xs text-red-500">Items not available — no approved badge found.</p>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid ${showSizeDropdown ? 'grid-cols-4' : 'grid-cols-3'} gap-3`}>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[#222]">Category</label>
           <select value={selCategory} onChange={handleCategorySelect} disabled={catalogueError}
@@ -332,12 +365,20 @@ function ItemsGrid({ items, setItems }) {
             className={(!selItem || catalogueError) ? selDis : selEnabled}>
             <option value="">Select model…</option>
             {filteredModels.map(m => (
-              <option key={m.modelId} value={m.modelId}>
-                {m.modelName}{m.size ? ` (${m.size})` : ''}
-              </option>
+              <option key={m.modelId} value={m.modelId}>{m.modelName}</option>
             ))}
           </select>
         </div>
+        {showSizeDropdown && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-[#222]">Size</label>
+            <select value={selSize} onChange={handleSizeSelect}
+              className={selEnabled}>
+              <option value="">Select size…</option>
+              {filteredSizes.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -353,14 +394,24 @@ function ItemsGrid({ items, setItems }) {
       </div>
 
       {items.length > 0 ? (
-        <div className="border border-[#e5e5e5] rounded-lg overflow-hidden">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#555] font-medium">Duration (all items):</span>
+            <select
+              value={sharedDuration}
+              onChange={e => handleDurationChange(e.target.value)}
+              className="px-2.5 py-1 rounded-lg border border-[#e5e5e5] text-xs text-[#000] bg-white focus:outline-none focus:border-[#14213d] cursor-pointer"
+            >
+              {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="border border-[#e5e5e5] rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[#f5f5f5] text-[#555] text-left">
                 <th className="px-4 py-2.5 font-medium">Item Name</th>
                 <th className="px-4 py-2.5 font-medium">Model</th>
                 <th className="px-4 py-2.5 font-medium">Value</th>
-                <th className="px-4 py-2.5 font-medium">Duration</th>
                 <th className="px-4 py-2.5 font-medium">Monthly</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -369,25 +420,16 @@ function ItemsGrid({ items, setItems }) {
               {items.map((item, i) => {
                 const rowCls = `border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`
                 return (
-                  <Fragment key={item.modelId}>
+                  <Fragment key={item.modelBadgeId}>
                     <tr className={rowCls}>
                       <td className="px-4 py-3 text-[#222] font-medium">{item.itemName}</td>
                       <td className="px-4 py-3 text-[#666]">{item.modelName}{item.size ? ` (${item.size})` : ''}</td>
                       <td className="px-4 py-3 text-[#444]">{LKR(item.price)}</td>
-                      <td className="px-4 py-3">
-                        <select
-                          value={item.duration_months}
-                          onChange={e => handleDurationChange(item.modelBadgeId, e.target.value)}
-                          className="px-2.5 py-1.5 rounded-lg border border-[#e5e5e5] text-sm text-[#000] bg-white focus:outline-none focus:border-[#14213d] cursor-pointer"
-                        >
-                          {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                      </td>
                       <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(item.monthly_rental ?? 0)}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
-                          onClick={() => setItems(prev => prev.filter(i => i.modelId !== item.modelId))}
+                          onClick={() => setItems(prev => prev.filter(i => i.modelBadgeId !== item.modelBadgeId))}
                           className="text-red-400 hover:text-red-600 transition-colors cursor-pointer"
                           title="Remove item"
                         >
@@ -396,10 +438,10 @@ function ItemsGrid({ items, setItems }) {
                       </td>
                     </tr>
                     <tr className={rowCls}>
-                      <td colSpan={6} className="px-4 pb-3 pt-0">
+                      <td colSpan={5} className="px-4 pb-3 pt-0">
                         <textarea
                           value={item.remark}
-                          onChange={e => handleRemarkChange(item.modelId, e.target.value)}
+                          onChange={e => handleRemarkChange(item.modelBadgeId, e.target.value)}
                           rows={1}
                           placeholder="Remark (optional)"
                           className="w-full px-3 py-1.5 rounded-md border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#555] placeholder-[#ccc] focus:outline-none focus:border-[#14213d] resize-none transition-colors duration-100"
@@ -413,7 +455,7 @@ function ItemsGrid({ items, setItems }) {
             {items.length > 1 && (
               <tfoot>
                 <tr className="border-t-2 border-[#e5e5e5] bg-[#f9f9f9]">
-                  <td colSpan={4} className="px-4 py-3 text-sm font-medium text-[#555]">Total Monthly Installment</td>
+                  <td colSpan={3} className="px-4 py-3 text-sm font-medium text-[#555]">Total Monthly Installment</td>
                   <td className="px-4 py-3 font-bold text-[#14213d]">
                     {LKR(items.reduce((sum, i) => sum + (i.monthly_rental ?? 0), 0))}
                   </td>
@@ -422,6 +464,7 @@ function ItemsGrid({ items, setItems }) {
               </tfoot>
             )}
           </table>
+          </div>
         </div>
       ) : (
         <div className="border border-dashed border-[#d8d8d8] rounded-lg py-10 text-center">
@@ -432,7 +475,7 @@ function ItemsGrid({ items, setItems }) {
   )
 }
 
-function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors }) {
+function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors, addressCols = 4 }) {
   const f = (key, extra) => {
     const fullKey = `${prefix}_${key}`
     const base = field(form, setForm, fullKey, extra)
@@ -444,22 +487,22 @@ function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors }) {
   }
   const phone = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9\s+\-]/g, '') } }) } }
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-4">
-        <Select label="Title"      {...f('title')}      options={TITLE_OPTIONS} />
-        <Input  label="Employee ID" {...f('employeeId')} placeholder="Emp ID" className="col-span-2" />
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-4 gap-2">
+        <Select label="Title"       {...f('title')}      options={TITLE_OPTIONS} />
+        <Input  label="Employee ID" {...f('employeeId')} placeholder="Emp ID" className="col-span-3" />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2">
         <Input label="Surname"                 {...f('surname')}              placeholder="Surname" />
         <Input label="Other Names"             {...f('otherNames')}           placeholder="Other names" />
         <Input label="Full Name with Initials" {...f('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2">
         <Input label="NIC Number"    {...f('nicNumber')}          placeholder="NIC" />
         <Input label="Mobile Number" {...phone('mobileNumber')}   type="tel" placeholder="07X XXX XXXX" />
         <Input label="Landline"      {...phone('landlineNumber')} type="tel" placeholder="0XX XXX XXXX" />
       </div>
-      <AddressGroup label="Permanent Address" baseKey={`${prefix}_permanentAddress`} form={form} setForm={setForm} />
+      <AddressGroup label="Permanent Address" baseKey={`${prefix}_permanentAddress`} form={form} setForm={setForm} cols={addressCols} />
     </div>
   )
 }
@@ -468,17 +511,25 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
   const [form, setForm] = useState(initialData ? apiToFormState(initialData) : INITIAL_FORM)
   const [items, setItems] = useState(
     initialData?.items
-      ? initialData.items.map(i => ({
-          modelBadgeId:   i.modelBadgeId,
-          modelId:        i.modelId,
-          category:       i.category,
-          itemName:       i.itemName || i.item_name,
-          modelName:      i.modelName || i.model,
-          size:           i.size,
-          price:          Number(i.price || i.item_value),
-          duration_months: i.duration_months || i.durationMonths || 24,
-          remark:         i.remark || '',
-        }))
+      ? initialData.items.map(i => {
+          const dur = i.duration_months || i.durationMonths || 24
+          return {
+            modelBadgeId:    i.modelBadgeId,
+            modelId:         i.modelId,
+            category:        i.category,
+            itemName:        i.itemName || i.item_name,
+            modelName:       i.modelName || i.model,
+            size:            i.size,
+            price:           Number(i.price || i.item_value),
+            duration_months: dur,
+            month6:          i.month6,
+            month12:         i.month12,
+            month18:         i.month18,
+            month24:         i.month24,
+            monthly_rental:  i['month' + dur] ?? undefined,
+            remark:          i.remark || '',
+          }
+        })
       : []
   )
   const [branches,         setBranches]         = useState([])
@@ -567,19 +618,19 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
           Orders
         </button>
         <span className="text-[#ccc] text-sm">/</span>
-        <h1 className="text-xl font-semibold text-[#14213d]">{orderId ? 'Update Order' : 'New Order'}</h1>
+        <h1 className="text-lg font-semibold text-[#14213d]">{orderId ? 'Update Order' : 'New Order'}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
         {/* ── Section 1: Customer Details ── */}
         <FormSection number="1" title="Customer Details">
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
 
             <SubGroup label="Employment">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#222]">Company / Employer</label>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-medium text-[#222]">Company / Employer</label>
                   <Combobox
                     value={form.companyName}
                     options={branches.map(b => ({ id: b.id, label: b.name }))}
@@ -588,19 +639,19 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                       setSelectedBranchId(id)
                     }}
                     placeholder="Search company…"
-                    className="w-full px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100"
+                    className="w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#222]">Project</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-[#222]">Project</label>
                   <select
                     value={form.projectId}
                     onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
                     required
                     disabled={!form.companyName}
                     className={!form.companyName
-                      ? "w-full px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-sm text-[#bbb] cursor-not-allowed"
-                      : "w-full px-4 py-2.5 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100 cursor-pointer"
+                      ? "w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#bbb] cursor-not-allowed"
+                      : "w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100 cursor-pointer"
                     }
                   >
                     <option value="">Select project…</option>
@@ -610,7 +661,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                   </select>
                 </div>
                 <Input label="Employee ID"              {...f('employeeId')}              placeholder="Emp. number" />
-                <Input label="Department & Designation" {...f('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-2" />
+                <Input label="Department & Designation" {...f('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-3" />
                 <Input label="Employment Start Date"    {...f('employmentStartDate')}     type="date" />
               </div>
             </SubGroup>
@@ -618,38 +669,35 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
             <SectionDivider />
 
             <SubGroup label="Personal Information">
-              <div className="grid grid-cols-3 gap-4">
-                <Select label="Title"                   {...f('title')}                options={TITLE_OPTIONS} />
-                <Input  label="Surname"                 {...f('surname')}              placeholder="Surname" />
-                <Input  label="Other Names"             {...f('otherNames')}           placeholder="Other names" />
-                <Input  label="Full Name with Initials" {...f('fullNameWithInitials')} placeholder="e.g. A. B. Perera" className="col-span-2" />
-                <Input  label="NIC Number"              {...f('nicNumber')}            placeholder="National ID" />
-                <Input  label="Date of Birth"           {...f('dateOfBirth')}          type="date" />
-                <Select label="Marital Status"          {...f('maritalStatus')}        options={MARITAL_OPTIONS} />
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-5 gap-2">
+                  <Select label="Title"                   {...f('title')}                options={TITLE_OPTIONS} />
+                  <Input  label="Surname"                 {...f('surname')}              placeholder="Surname" />
+                  <Input  label="Other Names"             {...f('otherNames')}           placeholder="Other names" />
+                  <Input  label="NIC Number"              {...f('nicNumber')}            placeholder="National ID" />
+                  <Input  label="Full Name with Initials" {...f('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <Input  label="Date of Birth"  {...f('dateOfBirth')}          type="date" />
+                  <Input  label="Mobile Number"  {...phone('mobileNumber')}     type="tel" placeholder="07X XXX XXXX" />
+                  <Input  label="Landline Number" {...phone('landlineNumber')}  type="tel" placeholder="0XX XXX XXXX" />
+                  <Select label="Marital Status" {...f('maritalStatus')}        options={MARITAL_OPTIONS} />
+                </div>
                 {form.maritalStatus === 'Married' && (
-                  <>
+                  <div className="grid grid-cols-3 gap-2">
                     <Input label="Spouse Name"           {...f('spouseName')}              placeholder="Spouse full name" className="col-span-2" />
                     <Input label="Spouse Contact Number" {...phone('spouseContactNumber')} type="tel" placeholder="07X XXX XXXX" />
-                  </>
+                  </div>
                 )}
               </div>
             </SubGroup>
 
             <SectionDivider />
 
-            <SubGroup label="Contact Details">
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Mobile Number"   {...phone('mobileNumber')}   type="tel" placeholder="07X XXX XXXX" />
-                <Input label="Landline Number" {...phone('landlineNumber')} type="tel" placeholder="0XX XXX XXXX" />
-              </div>
-            </SubGroup>
-
-            <SectionDivider />
-
             <SubGroup label="Address">
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <AddressGroup label="Permanent Address" baseKey="permanentAddress" form={form} setForm={setForm} />
-                <label className="flex items-center gap-2 text-sm text-[#222] cursor-pointer">
+                <label className="flex items-center gap-2 text-xs text-[#222] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={form.hasPostalAddress}
@@ -669,14 +717,14 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
         {/* ── Section 2: Guarantor Details ── */}
         <FormSection number="2" title="Guarantor Details">
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-xs font-semibold text-[#fca311] uppercase tracking-widest mb-4">Guarantor 01</p>
-              <GuarantorFields prefix="g1" form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
+              <p className="text-[10px] font-semibold text-[#fca311] uppercase tracking-widest mb-3">Guarantor 01</p>
+              <GuarantorFields prefix="g1" form={form} setForm={setForm} errors={errors} setErrors={setErrors} addressCols={2} />
             </div>
-            <div className="border-t border-[#e5e5e5] pt-6">
-              <p className="text-xs font-semibold text-[#fca311] uppercase tracking-widest mb-4">Guarantor 02</p>
-              <GuarantorFields prefix="g2" form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
+            <div className="border-l border-[#e5e5e5] pl-4">
+              <p className="text-[10px] font-semibold text-[#fca311] uppercase tracking-widest mb-3">Guarantor 02</p>
+              <GuarantorFields prefix="g2" form={form} setForm={setForm} errors={errors} setErrors={setErrors} addressCols={2} />
             </div>
           </div>
         </FormSection>

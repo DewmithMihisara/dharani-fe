@@ -8,7 +8,7 @@ export default function Button({
   className = '',
 }) {
   const base =
-    'inline-flex items-center justify-center py-2.5 px-5 rounded-lg text-sm font-semibold tracking-wide transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+    'inline-flex items-center justify-center py-2 px-5 rounded-lg text-xs font-semibold tracking-wide transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
 
   const variants = {
     primary:

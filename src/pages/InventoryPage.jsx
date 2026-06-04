@@ -4,7 +4,7 @@ import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AddBadgeForm from './AddBadgeForm'
 import BadgeView from './BadgeView'
-import { getBadgesPaginated } from '../api/inventoryApi'
+import { getBadgesPaginated, endBadge } from '../api/inventoryApi'
 
 const iconBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
 const endBtn  = 'px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-100 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
@@ -28,7 +28,7 @@ function InventoryTable({ badges, onEdit, onView, onEnd }) {
 
   return (
     <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-x-auto">
-      <table className="min-w-max w-full text-sm">
+      <table className="min-w-max w-full text-xs">
         <thead>
           <tr className="bg-[#14213d] text-white text-left">
             <th className="px-5 py-3.5 font-medium whitespace-nowrap">Badge #</th>
@@ -117,16 +117,27 @@ export default function InventoryPage() {
   }
 
   function handleEnd(id) {
-    confirm('End this badge?', () => {
-      setBadges(prev => prev.map(b => b.id === id ? { ...b, status: 'ENDED' } : b))
+    confirm('End this badge?', async () => {
+      const res = await endBadge(id, token)
+      if (res.status === 200) {
+        loadBadges(offset, limit)
+      } else {
+        alert(res.message || 'Failed to end badge')
+      }
     })
+  }
+
+  function handleBack() {
+    setEditBadge(null)
+    setView('list')
+    loadBadges(offset, limit)
   }
 
   if (view === 'form') return (
     <div className="p-8">
       <AddBadgeForm
         badge={editBadge}
-        onBack={() => { setEditBadge(null); setView('list') }}
+        onBack={handleBack}
         onSave={handleSave}
       />
     </div>
@@ -135,7 +146,7 @@ export default function InventoryPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#14213d]">Inventory</h1>
+        <h1 className="text-xl font-semibold text-[#14213d]">Inventory</h1>
         <Button onClick={() => setView('form')}>
           <Plus size={15} className="mr-1.5" />
           Add Badge

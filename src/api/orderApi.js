@@ -33,24 +33,24 @@ export async function printSingerForm(orderId, token = null) {
   const dateParts = (o.date || '').split('-')
   const yyyy = dateParts[0] || '', mm = dateParts[1] || '', dd = dateParts[2] || ''
 
-  const ROWS = 5
-  const items = (o.items || []).slice(0, ROWS)
+  const items = (o.items || []).slice(0, 5)
+  const ROWS  = Math.max(3, items.length)
 
   const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString('en-LK') : ''
-  const rental = i => (i.item_value && i.duration_months)
-    ? Math.ceil(Number(i.item_value) / i.duration_months)
-    : null
+  const rental = i => {
+    const val = Number(i['month' + i.duration_months] || 0)
+    return val > 0 ? val : null
+  }
 
   const totalCash   = items.reduce((s, i) => s + (Number(i.item_value) || 0), 0)
   const totalRental = items.reduce((s, i) => s + (rental(i) || 0), 0)
 
   const itemRows = Array.from({ length: ROWS }, (_, idx) => {
     const i = items[idx]
-    const num = idx + 1
-    if (!i) return `<tr><td class="num">${num}</td><td></td><td></td><td class="r"></td><td class="r"></td><td class="c"></td></tr>`
+    if (!i) return `<tr><td class="num"></td><td></td><td></td><td class="r"></td><td class="r"></td><td class="c"></td></tr>`
     const r = rental(i)
     return `<tr>
-      <td class="num">${num}</td>
+      <td class="num">${idx + 1}</td>
       <td class="pl">${i.item_name || ''}</td>
       <td class="pl">${i.model || ''}</td>
       <td class="r pl">${fmt(i.item_value)}</td>
@@ -63,47 +63,47 @@ export async function printSingerForm(orderId, token = null) {
 <title>Singer Finance Offer Letter</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;
+body{font-family:'Times New Roman',Times,serif;font-size:13px;color:#000;
      width:210mm;margin:0 auto;padding:8mm 10mm}
 @media print{body{padding:6mm 10mm}@page{size:A4;margin:0}}
 .hdr{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
-.hdr-name{font-size:16px;font-weight:bold;letter-spacing:0.5px;line-height:1.5}
-.hdr-addr{font-size:13px;line-height:1.6}
+.hdr-name{font-size:19px;font-weight:bold;letter-spacing:0.5px;line-height:1.5}
+.hdr-addr{font-size:15px;line-height:1.6}
 .customer-info{margin-bottom:8px}
 .ci-row{display:flex;align-items:baseline;margin-bottom:5px;gap:3px}
-.ci-label{min-width:140px;white-space:nowrap;font-weight:bold}
-.ci-colon{margin-right:3px}
-.ci-val{border-bottom:1px dotted #777;flex:1;padding-left:4px;min-height:15px}
-.ci-gap{min-width:30px}
+.ci-label{white-space:nowrap;font-weight:bold}
 .ci-label2{white-space:nowrap;font-weight:bold}
-.ci-box{border:1px solid #000;padding:1px 8px;min-width:90px;text-align:center;display:inline-block}
-.date-seg{border:1px solid #000;padding:1px 7px;min-width:30px;text-align:center;display:inline-block}
+.ci-box{padding:1px 8px;min-width:90px;display:inline-block}
+.date-seg{padding:1px 4px;display:inline-block}
 .date-slash{margin:0 2px}
-.outer{border:1.5px solid #000}
-table.items{width:100%;border-collapse:collapse;font-size:11.5px}
-table.items th,table.items td{border:1px solid #000;vertical-align:middle}
-table.items th{padding:3px 4px;text-align:center;font-size:10.5px;font-weight:bold}
+.outer{border:1px solid #aaa}
+table.items{width:100%;border-collapse:collapse;font-size:12.5px}
+table.items th,table.items td{border:1px solid #aaa;vertical-align:middle}
+table.items th{padding:3px 4px;text-align:center;font-size:11.5px;font-weight:normal}
+table.items tbody td{border-top:none;border-bottom:none}
+table.items tbody tr:last-child td{border-bottom:1px solid #aaa}
+table.items tfoot td{border-style:hidden}
 table.items tr{height:32px}
 .num{width:22px;text-align:center;padding:2px 3px}
 .pl{padding:2px 5px}
 .r{text-align:right;padding:2px 5px}
 .c{text-align:center;padding:2px 5px}
-.bot{display:flex;border-top:1px solid #000}
-.bot-left{border-right:1px solid #000;padding:8px 12px;min-width:200px}
-.bfields{display:grid;grid-template-columns:auto auto auto;align-items:center;gap:7px 8px;font-size:12px}
-.bl-label{white-space:nowrap}
-.bl-box{border:1px solid #000;padding:2px 6px;min-width:85px;text-align:center}
+.bot{display:flex;gap:6px;margin-top:6px}
+.bot-left{border:1px solid #aaa;padding:8px 12px;min-width:200px}
+.bfields{display:grid;grid-template-columns:auto auto auto;align-items:center;gap:7px 8px;font-size:13px}
+.bl-label{line-height:1.3}
+.bl-box{border:1px solid #000;padding:2px 6px;min-width:50px;text-align:center}
 .bl-unit{white-space:nowrap}
-.bot-mid{flex:1;border-right:1px solid #000;padding:6px 8px}
-.bot-right{flex:1;padding:6px 8px}
-.sec-title{text-align:center;font-weight:bold;font-size:12px;margin-bottom:3px}
-.offer-title{text-align:center;font-weight:bold;font-size:13px;margin:8px 0 5px}
-.cond{font-size:10px;line-height:1.5;padding:0 2px}
+.bot-mid{flex:1;border:1px solid #aaa;padding:8px 8px 24px}
+.bot-right{flex:1;border:1px solid #aaa;padding:8px 8px 24px}
+.sec-title{text-align:center;font-weight:normal;font-size:12px;margin-bottom:3px}
+.offer-title{text-align:center;font-weight:bold;font-size:14px;margin:8px 0 5px}
+.cond{font-size:11px;line-height:1.5;padding:0 2px}
 .cond p{margin-bottom:3px}
 .cond ol{margin-left:16px;margin-bottom:4px}
 .cond ol li{margin-bottom:2px}
 .bold{font-weight:bold}
-.sig{margin-top:16px;font-size:12px}
+.sig{margin-top:16px;font-size:13px}
 .sig-line{border-bottom:1px solid #000;width:220px;margin-top:70px;margin-bottom:3px}
 </style></head><body>
 
@@ -112,30 +112,26 @@ table.items tr{height:32px}
   <div class="hdr-addr">No. 498, R. A. De Mel Mawatha, Colombo 03.&nbsp;&nbsp;&nbsp;Tel : 0112 400 400</div>
 </div>
 
-<div class="customer-info">
-  <div class="ci-row">
-    <span class="ci-label">Institution</span>
-    <span class="ci-colon">:</span>
-    <span class="ci-val">${o.companyName || ''}</span>
-    <span class="ci-gap"></span>
-    <span class="ci-label2">EPF Number</span>
-    <span class="ci-colon">:</span>
-    <span class="ci-box">${o.employeeId || ''}</span>
-  </div>
-  <div class="ci-row">
-    <span class="ci-label">Customer Name</span>
-    <span class="ci-colon">:</span>
-    <span class="ci-val">${o.fullNameWithInitials || ''}</span>
-    <span class="ci-gap"></span>
-    <span class="ci-label2">Date</span>
-    <span class="ci-colon">:</span>
-    <span class="date-seg">${dd}</span><span class="date-slash">/</span><span class="date-seg">${mm}</span><span class="date-slash">/</span><span class="date-seg">${yyyy}</span>
-  </div>
-  <div class="ci-row">
-    <span class="ci-label">Contact Number</span>
-    <span class="ci-colon">:</span>
-    <span class="ci-val">${o.mobileNumber || ''}</span>
-  </div>
+<div class="customer-info" style="display:grid;grid-template-columns:max-content 12px 1fr 20px max-content 12px auto;row-gap:5px;align-items:baseline">
+  <span class="ci-label">Institution</span>
+  <span>:</span>
+  <span>${o.companyName || ''}</span>
+  <span></span>
+  <span class="ci-label2">EPF Number</span>
+  <span>:</span>
+  <span>${o.employeeId || ''}</span>
+
+  <span class="ci-label">Customer Name</span>
+  <span>:</span>
+  <span>${o.fullNameWithInitials || ''}</span>
+  <span></span>
+  <span class="ci-label2">Date</span>
+  <span>:</span>
+  <span>${dd}&nbsp;/&nbsp;${mm}&nbsp;/&nbsp;${yyyy}</span>
+
+  <span class="ci-label">Contact Number</span>
+  <span>:</span>
+  <span style="grid-column:3/-1">${o.mobileNumber || ''}</span>
 </div>
 
 <div class="outer">
@@ -151,47 +147,45 @@ table.items tr{height:32px}
       </tr>
     </thead>
     <tbody>${itemRows}</tbody>
-    <tfoot>
-      <tr style="font-weight:bold">
-        <td class="num"></td>
-        <td colspan="2" class="c">TOTAL</td>
-        <td class="r pl">${fmt(totalCash)}</td>
-        <td class="r pl">${fmt(totalRental)}</td>
-        <td></td>
-      </tr>
-    </tfoot>
   </table>
-
-  <div class="bot">
-    <div class="bot-left">
-      <div class="bfields">
-        <span class="bl-label">Total Rental (Monthly)</span>
-        <span class="bl-box">${fmt(totalRental)}</span>
-        <span class="bl-unit">&nbsp;</span>
-        <span class="bl-label">Term</span>
-        <span class="bl-box">&nbsp;</span>
-        <span class="bl-unit">M</span>
-        <span class="bl-label">Interest Rate (Nominal)</span>
-        <span class="bl-box">&nbsp;</span>
-        <span class="bl-unit">%</span>
-      </div>
-    </div>
-    <div class="bot-mid"><div class="sec-title">Supplier Details</div></div>
-    <div class="bot-right"><div class="sec-title">Singer Finance (Lanka) PLC</div></div>
+  <div style="display:flex;align-items:baseline;font-weight:bold;font-size:12.5px;padding:3px 0;margin-top:2px">
+    <div style="width:22px;flex-shrink:0"></div>
+    <div style="flex:1;text-align:center">TOTAL</div>
+    <div style="width:16%;flex-shrink:0;text-align:right;padding-right:5px;border-bottom:3px double #888">${fmt(totalCash)}</div>
+    <div style="width:14%;flex-shrink:0"></div>
+    <div style="width:10%;flex-shrink:0"></div>
   </div>
+</div>
+
+<div class="bot">
+  <div class="bot-left">
+    <div class="bfields">
+      <span class="bl-label">Total Rental<br>(Monthly)</span>
+      <span class="bl-box">${fmt(totalRental)}</span>
+      <span class="bl-unit">&nbsp;</span>
+      <span class="bl-label">Term</span>
+      <span class="bl-box">${items[0]?.duration_months || ''}</span>
+      <span class="bl-unit">M</span>
+      <span class="bl-label">Interest Rate<br>(Nominal)</span>
+      <span class="bl-box">&nbsp;</span>
+      <span class="bl-unit">%</span>
+    </div>
+  </div>
+  <div class="bot-mid"><div class="sec-title">Supplier Details</div></div>
+  <div class="bot-right"><div class="sec-title">Singer Finance (Lanka) PLC</div></div>
 </div>
 
 <div class="offer-title">Offer Letter Group sale Facility</div>
 
 <div class="cond">
-  <p>1. Facility Amount &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : <em>As mentioned in the Invoice</em></p>
-  <p>2. Rental &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : <em>As mentioned in the Invoice</em></p>
-  <p>3. Interest Rate &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : <em>As mentioned in the Invoice</em></p>
-  <p>4. Default Rate &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : <em>Not Applicable</em></p>
-  <p>5. Security Offered,<br>
-  &nbsp;&nbsp;&nbsp;(I) Items describe in the invoice<br>
-  &nbsp;&nbsp;&nbsp;(ii) Personal guarantee of two employees in the institute</p>
-  <p>6. Due date &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : Informing via SMS</p>
+  <div style="display:grid;grid-template-columns:max-content 12px 1fr;row-gap:3px;margin-bottom:3px">
+    <span>1. Facility Amount</span><span>:</span><em>As mentioned in the Invoice</em>
+    <span>2. Rental</span><span>:</span><em>As mentioned in the Invoice</em>
+    <span>3. Interest Rate</span><span>:</span><em>As mentioned in the Invoice</em>
+    <span>4. Default Rate</span><span>:</span><em>Not Applicable</em>
+    <span style="grid-column:1/-1;margin:2px 0">5. Security Offered,<br>&nbsp;&nbsp;&nbsp;(I) Items describe in the invoice<br>&nbsp;&nbsp;&nbsp;(ii) Personal guarantee of two employees in the institute</span>
+    <span>6. Due date</span><span>:</span><span>Informing via SMS</span>
+  </div>
   <p class="bold" style="margin-top:5px">General Conditions</p>
   <ol>
     <li>We reserve the right to include/pass on any new taxes/levies imposed by the government from time to time.</li>

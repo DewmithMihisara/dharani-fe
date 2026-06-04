@@ -13,7 +13,7 @@ export default function Input({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={id} className="text-sm font-medium text-[#222]">
+        <label htmlFor={id} className="text-xs font-medium text-[#222]">
           {label}
           {required && <span className="text-[#fca311] ml-0.5">*</span>}
         </label>
@@ -26,7 +26,7 @@ export default function Input({
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}
-        className={`w-full px-4 py-2.5 rounded-lg border ${error ? 'border-red-400 focus:border-red-500' : 'border-[#e5e5e5] focus:border-[#14213d]'} bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none transition-colors duration-100`}
+        className={`w-full px-4 py-2 rounded-lg border ${error ? 'border-red-400 focus:border-red-500' : 'border-[#e5e5e5] focus:border-[#14213d]'} bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none transition-colors duration-100`}
       />
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>

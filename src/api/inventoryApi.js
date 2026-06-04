@@ -20,6 +20,10 @@ export async function approveBadge(id, token = null) {
   return apiPatch(`/inventory/badges/${id}/approve`, {}, token)
 }
 
+export async function endBadge(id, token = null) {
+  return apiPatch(`/inventory/badges/${id}/end`, {}, token)
+}
+
 export async function getCategories(token = null) {
   return apiGet('/inventory/categories', token)
 }
