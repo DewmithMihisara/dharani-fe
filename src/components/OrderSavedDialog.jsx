@@ -1,6 +1,8 @@
 import { Check } from 'lucide-react'
 
-export default function OrderSavedDialog({ orderCode, onPrint, onClose }) {
+export default function OrderSavedDialog({ orderCode, onPrint, onClose,
+  title = 'Order saved successfully!',
+  message = 'Do you want to print the Singer Finance Form?' }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" />
@@ -10,13 +12,13 @@ export default function OrderSavedDialog({ orderCode, onPrint, onClose }) {
             <Check size={20} className="text-green-600" strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <p className="text-sm font-semibold text-[#222]">Order saved successfully!</p>
+            <p className="text-sm font-semibold text-[#222]">{title}</p>
             <p className="text-xs text-[#aaa] mt-2">Order Code</p>
             <p className="text-base font-bold text-[#14213d] mt-0.5 tracking-wide">{orderCode}</p>
           </div>
         </div>
         <p className="text-xs text-[#888] text-center mb-5">
-          Do you want to print the Singer Finance Form?
+          {message}
         </p>
         <div className="flex justify-end gap-2">
           <button
