@@ -81,7 +81,7 @@
   },
   {
     "id": "ORD-002",
-    "status": "ORDER_PROCESSING",
+    "status": "IN_PRODUCTION",
     "date": "2026-05-18",
     "companyName": "Brandix Lanka",
     "employeeId": "EMP-0837",
@@ -157,7 +157,7 @@
     "partialPayment": null,
     "history": [
       { "date": "2026-05-18", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-19", "status": "ORDER_PROCESSING", "remark": "Singer Finance approved. Order sent to workshop for production." }
+      { "date": "2026-05-19", "status": "IN_PRODUCTION", "remark": "Singer Finance approved. Order sent to workshop for production." }
     ]
   },
   {
@@ -237,7 +237,7 @@
     "partialPayment": null,
     "history": [
       { "date": "2026-05-17", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-18", "status": "ORDER_PROCESSING", "remark": "Singer Finance approved. Sent to workshop." },
+      { "date": "2026-05-18", "status": "IN_PRODUCTION", "remark": "Singer Finance approved. Sent to workshop." },
       { "date": "2026-05-20", "status": "ON_DELIVERY", "remark": "Item ready. Delivery truck dispatched to Kandy." }
     ]
   },
@@ -320,7 +320,7 @@
     "partialPayment": { "amount": 35000 },
     "history": [
       { "date": "2026-05-15", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-16", "status": "ORDER_PROCESSING", "remark": "Approved. Workshop production started." },
+      { "date": "2026-05-16", "status": "IN_PRODUCTION", "remark": "Approved. Workshop production started." },
       { "date": "2026-05-18", "status": "ON_DELIVERY", "remark": "Delivery truck dispatched to Galle." },
       { "date": "2026-05-20", "status": "DELIVERED", "remark": "Delivered and installed. Customer signed delivery note. Partial payment of LKR 35,000 collected on delivery." }
     ]
@@ -489,7 +489,7 @@
   },
   {
     "id": "ORD-007",
-    "status": "ORDER_PROCESSING",
+    "status": "IN_PRODUCTION",
     "date": "2026-05-19",
     "companyName": "Brandix Lanka",
     "employeeId": "EMP-0731",
@@ -565,7 +565,7 @@
     "partialPayment": null,
     "history": [
       { "date": "2026-05-19", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-20", "status": "ORDER_PROCESSING", "remark": "Singer Finance approved. Production started at workshop." }
+      { "date": "2026-05-20", "status": "IN_PRODUCTION", "remark": "Singer Finance approved. Production started at workshop." }
     ]
   },
   {
@@ -646,7 +646,7 @@
     "partialPayment": null,
     "history": [
       { "date": "2026-05-16", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-17", "status": "ORDER_PROCESSING", "remark": "Approved. Items prepared at workshop." },
+      { "date": "2026-05-17", "status": "IN_PRODUCTION", "remark": "Approved. Items prepared at workshop." },
       { "date": "2026-05-21", "status": "ON_DELIVERY", "remark": "Delivery dispatched to Ratnapura. ETA same day." }
     ]
   },
@@ -729,7 +729,7 @@
     "partialPayment": { "amount": 22500 },
     "history": [
       { "date": "2026-05-12", "status": "APPROVAL_PROCESSING", "remark": "Order submitted for Singer Finance approval." },
-      { "date": "2026-05-13", "status": "ORDER_PROCESSING", "remark": "Approved. Workshop started production." },
+      { "date": "2026-05-13", "status": "IN_PRODUCTION", "remark": "Approved. Workshop started production." },
       { "date": "2026-05-15", "status": "ON_DELIVERY", "remark": "Delivery dispatched to Badulla." },
       { "date": "2026-05-17", "status": "DELIVERED", "remark": "Delivered and signed. Partial payment of LKR 22,500 received." }
     ]

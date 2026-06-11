@@ -1,17 +1,22 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X } from 'lucide-react'
+import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X, Download } from 'lucide-react'
+import ExcelJS from 'exceljs'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
 import OrderSavedDialog from '../components/OrderSavedDialog'
 import NewOrderForm from './NewOrderForm'
-import { getAllOrdersPaginated, getOrderById, deleteOrder, printSingerForm, printPartialInvoice, printPurchaseOrder, printDeliveryNote, updateOrderStatus, savePartialPayments } from '../api/orderApi'
+import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus, savePartialPayments, getApprovedOrdersForExport } from '../api/orderApi'
+import { printSingerForm } from '../print/printSingerForm'
+import { printPartialInvoice } from '../print/printPartialInvoice'
+import { printPurchaseOrder } from '../print/printPurchaseOrder'
+import { printDeliveryNote } from '../print/printDeliveryNote'
 
 const STATUS_VARIANT = {
   APPROVAL_PROCESSING: 'approval',
   APPROVED:            'approved',
   NOT_APPROVED:        'not_approved',
-  ORDER_PROCESSING:    'processing',
+  IN_PRODUCTION:       'processing',
   ON_DELIVERY:         'delivery',
   DELIVERED:           'delivered',
 }
@@ -20,13 +25,13 @@ const STATUS_LABELS = {
   APPROVAL_PROCESSING: 'Approval Processing',
   APPROVED:            'Approved',
   NOT_APPROVED:        'Not Approved',
-  ORDER_PROCESSING:    'Order Processing',
+  IN_PRODUCTION:       'In Production',
   ON_DELIVERY:         'On Delivery',
   DELIVERED:           'Delivered',
 }
 
 const EDIT_STATUSES     = new Set(['APPROVAL_PROCESSING', 'NOT_APPROVED'])
-const PO_STATUSES       = new Set(['ORDER_PROCESSING', 'ON_DELIVERY', 'DELIVERED'])
+const PO_STATUSES       = new Set(['IN_PRODUCTION', 'ON_DELIVERY', 'DELIVERED'])
 const DELIVERY_STATUSES = new Set(['ON_DELIVERY', 'DELIVERED'])
 
 const iconBtn        = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
@@ -89,7 +94,7 @@ const ALL_STATUS_OPTIONS = [
   { value: 'APPROVAL_PROCESSING', label: 'APPROVAL PROCESSING', active: 'border-[#a06800] bg-[#fca311]/15 text-[#a06800]',   hover: 'hover:border-[#fca311] hover:text-[#a06800]'   },
   { value: 'NOT_APPROVED',        label: 'NOT APPROVED',        active: 'border-red-500 bg-red-50 text-red-600',              hover: 'hover:border-red-400 hover:text-red-500'         },
   { value: 'APPROVED',            label: 'APPROVED',            active: 'border-green-500 bg-green-50 text-green-600',        hover: 'hover:border-green-400 hover:text-green-500'     },
-  { value: 'ORDER_PROCESSING',    label: 'ORDER PROCESSING',    active: 'border-blue-500 bg-blue-50 text-blue-700',           hover: 'hover:border-blue-400 hover:text-blue-600'       },
+  { value: 'IN_PRODUCTION',       label: 'IN PRODUCTION',       active: 'border-blue-500 bg-blue-50 text-blue-700',           hover: 'hover:border-blue-400 hover:text-blue-600'       },
   { value: 'ON_DELIVERY',         label: 'ON DELIVERY',         active: 'border-orange-500 bg-orange-50 text-orange-700',     hover: 'hover:border-orange-400 hover:text-orange-600'   },
   { value: 'DELIVERED',           label: 'DELIVERED',           active: 'border-green-500 bg-green-50 text-green-700',        hover: 'hover:border-green-400 hover:text-green-600'     },
 ]
@@ -123,7 +128,7 @@ function OrderStatusSection({ o, token, onSaved }) {
     (selected === 'DELIVERED'   && (!driverName.trim()     || !meterEnd.trim()))
 
   async function handleSave() {
-    if (!selected || deliveryFieldsMissing) return
+    if (!selected || deliveryFieldsMissing || !statusRemark.trim()) return
     setSaving(true)
     const body = { status: selected, remark: statusRemark }
     if (selected === 'ON_DELIVERY') { body.vehicleNumber = deliveryVehicle; body.meterStart = meterStart }
@@ -142,7 +147,7 @@ function OrderStatusSection({ o, token, onSaved }) {
     setSaving(false)
     onSaved()
     if (didSavePayments) setShowPrintDialog(true)
-    if (selected === 'ORDER_PROCESSING') setShowPrintPoDialog(true)
+    if (selected === 'IN_PRODUCTION') setShowPrintPoDialog(true)
     if (selected === 'ON_DELIVERY')      setShowPrintDeliveryDialog(true)
   }
 
@@ -177,6 +182,9 @@ function OrderStatusSection({ o, token, onSaved }) {
       )}
       <DetailSection title="Order Status">
         <div className="flex flex-col gap-4">
+          {o.status === 'DELIVERED' ? (
+            <p className="text-sm text-[#aaa] italic">Order is delivered. No further status changes allowed.</p>
+          ) : (<>
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold text-[#555]">Set Status</p>
             <div className="flex gap-3 flex-wrap">
@@ -243,7 +251,7 @@ function OrderStatusSection({ o, token, onSaved }) {
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Remark</label>
+            <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Remark <span className="text-red-400">*</span></label>
             <textarea
               className="w-full border border-[#e5e5e5] rounded-lg px-3 py-2 text-sm text-[#333] resize-none focus:outline-none focus:border-[#14213d]"
               rows={2}
@@ -312,12 +320,13 @@ function OrderStatusSection({ o, token, onSaved }) {
           <div className="flex justify-end">
             <button
               onClick={handleSave}
-              disabled={!selected || saving || deliveryFieldsMissing}
+              disabled={!selected || saving || deliveryFieldsMissing || !statusRemark.trim()}
               className="px-5 py-2 rounded-lg bg-[#14213d] text-white text-xs font-semibold hover:bg-[#1e2f5a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
+          </>)}
         </div>
       </DetailSection>
     </>
@@ -451,6 +460,7 @@ function OrderDetailModal({ order, token, onRefresh, onClose }) {
                       const discountedPrice = disc > 0 ? Math.round(itemValue * (1 - disc / 100)) : itemValue
                       const finalPrice      = discountedPrice - paidAmt
                       const adjMonthly      = Math.ceil(baseMonthly * finalPrice / itemValue) * qty
+                      const totalFinalPrice = finalPrice * qty
                       const priceAfterDiscount = disc > 0 ? discountedPrice : null
                       return (
                         <Fragment key={i}>
@@ -462,7 +472,7 @@ function OrderDetailModal({ order, token, onRefresh, onClose }) {
                             <td className="px-4 py-3 text-center text-[#555]">{disc > 0 ? `${disc}%` : '—'}</td>
                             <td className="px-4 py-3 text-[#555]">{priceAfterDiscount != null ? LKR(priceAfterDiscount) : '—'}</td>
                             <td className="px-4 py-3 text-[#e05c3a] font-medium">{paidAmt > 0 ? LKR(paidAmt) : '—'}</td>
-                            <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(finalPrice)}</td>
+                            <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(totalFinalPrice)}</td>
                             <td className="px-4 py-3 font-bold text-[#14213d]">{LKR(adjMonthly)}</td>
                           </tr>
                           {item.remark && (
@@ -668,9 +678,10 @@ function ActionButtons({ order, onView, onEdit, onDelete }) {
           </button>
         )}
         <button
-          className={deleteBtn}
-          title="Delete Order"
-          onClick={() => confirm(`Delete order ${displayId}? This cannot be undone.`, () => onDelete(order))}
+          className={order.status === 'DELIVERED' ? disabledBtn : deleteBtn}
+          title={order.status === 'DELIVERED' ? 'Cannot delete a delivered order' : 'Delete Order'}
+          disabled={order.status === 'DELIVERED'}
+          onClick={order.status === 'DELIVERED' ? undefined : () => confirm(`Delete order ${displayId}? This cannot be undone.`, () => onDelete(order))}
         >
           <Trash2 size={15} />
         </button>
@@ -765,6 +776,23 @@ function OrdersTable({ orders, onView, onEdit, onDelete }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function calcServiceYears(dateStr) {
+  if (!dateStr) return ''
+  const start = new Date(dateStr)
+  const now = new Date()
+  if (isNaN(start.getTime()) || start > now) return ''
+  let y = now.getFullYear() - start.getFullYear()
+  let m = now.getMonth() - start.getMonth()
+  let d = now.getDate() - start.getDate()
+  if (d < 0) { m--; d += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
+  if (m < 0) { y--; m += 12 }
+  return `${y}Y ${m}M ${d}D`
+}
+
+function getInitials(name) {
+  return (name || '').split(' ').map(w => w[0]).filter(Boolean).join(' ')
+}
+
 export default function OrdersPage() {
   const [view,      setView]      = useState('list')
   const [orders,    setOrders]    = useState([])
@@ -774,8 +802,148 @@ export default function OrdersPage() {
   const [offset,     setOffset]     = useState(0)
   const [total,      setTotal]      = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [exportOpen,     setExportOpen]     = useState(false)
+  const [exportFilename, setExportFilename] = useState('approved-orders')
+  const [exporting,      setExporting]      = useState(false)
 
   const backToList = () => { setEditOrder(null); setView('list'); setRefreshKey(k => k + 1) }
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await getApprovedOrdersForExport(token)
+      if (res.status !== 200) return
+      const exportOrders = res.data.orders || []
+
+      const rows = exportOrders.map((o, idx) => {
+        const catItems    = o.items       || []
+        const singerItems = o.singerItems || []
+        const allItems    = [...catItems, ...singerItems]
+        const catCount    = catItems.length
+
+        const eqptCols = {}
+        for (let i = 0; i < 5; i++) {
+          const n    = i + 1
+          const item = allItems[i]
+          const isSinger = i >= catCount
+          eqptCols[`EQPT0${n}_UNIT_PRICE`] = item ? (isSinger ? (item.price_per_item ?? '') : (item.item_value ?? '')) : ''
+          eqptCols[`EQPT0${n}_MODEL`]       = item?.model    || ''
+          eqptCols[`EQPT0${n}_MAKE`]        = ''
+          eqptCols[`EQPT0${n}_TYPE`]        = item?.item_name || ''
+          eqptCols[`EQPT0${n}_SINGERITEM`]  = ''
+        }
+
+        const cashPrice = [
+          ...catItems.map(it    => Number(it.item_value    || 0) * Number(it.qty || 1)),
+          ...singerItems.map(it => Number(it.price_per_item || 0) * Number(it.qty || 1)),
+        ].reduce((a, b) => a + b, 0)
+
+        const rental = [
+          ...catItems.map(it    => Number(it[`month${it.duration_months}`] || 0) * Number(it.qty || 1)),
+          ...singerItems.map(it => Number(it.monthly_per_item || 0)          * Number(it.qty || 1)),
+        ].reduce((a, b) => a + b, 0)
+
+        return {
+          SEQNO:         idx + 1,
+          TITLE:         o.title                    || '',
+          DESIGNATION:   o.departmentAndDesignation  || '',
+          'JOIN DATE':   o.employmentStartDate        || '',
+          SERVICE:       calcServiceYears(o.employmentStartDate),
+          INITIALS:      getInitials(o.surname),
+          SURNAME:       o.surname                   || '',
+          OTHERNAMES:    o.otherNames                || '',
+          NAME:          o.fullNameWithInitials       || '',
+          EPF_NO:        o.employeeId                || '',
+          NICNO:         o.nicNumber                 || '',
+          ADDRES_LINE01: o.permanentAddress1          || '',
+          ADDRES_LINE02: o.permanentAddress2          || '',
+          ADDRES_LINE03: o.permanentAddress3          || '',
+          ADDRES_LINE04: o.permanentAddress4          || '',
+          HOME_TP:       o.landlineNumber             || '',
+          'MOBILE NU':   o.mobileNumber               || '',
+          OFFICE_TP:     '',
+          ...eqptCols,
+          'CASH PRICE':  cashPrice,
+          RENTAL:        rental,
+          TERMS:         catItems[0]?.duration_months ?? '',
+          G1TITLE:          o.g1_title             || '',
+          G1INITIALS:       getInitials(o.g1_surname),
+          G1SURNAME:        o.g1_surname            || '',
+          G1EPF_NO:         o.g1_employeeId         || '',
+          G1NICNO:          o.g1_nicNumber          || '',
+          G1ADDRES_LINE01:  o.g1_permanentAddress1  || '',
+          G1ADDRES_LINE02:  o.g1_permanentAddress2  || '',
+          G1ADDRES_LINE03:  o.g1_permanentAddress3  || '',
+          G1ADDRES_LINE04:  o.g1_permanentAddress4  || '',
+          G1HOME_TP:        o.g1_landlineNumber     || '',
+          G1MOBILE:         o.g1_mobileNumber       || '',
+          G1OFFICE_TP:      '',
+          G2TITLE:          o.g2_title             || '',
+          G2INITIALS:       getInitials(o.g2_surname),
+          G2SURNAME:        o.g2_surname            || '',
+          G2EPF_NO:         o.g2_employeeId         || '',
+          G2NICNO:          o.g2_nicNumber          || '',
+          G2ADDRES_LINE01:  o.g2_permanentAddress1  || '',
+          G2ADDRES_LINE02:  o.g2_permanentAddress2  || '',
+          G2ADDRES_LINE03:  o.g2_permanentAddress3  || '',
+          G2ADDRES_LINE04:  o.g2_permanentAddress4  || '',
+          G2HOME_TP:        o.g2_landlineNumber     || '',
+          G2MOBILE:         o.g2_mobileNumber       || '',
+          G2OFFICE_TP:      '',
+        }
+      })
+
+      const colKeys = [
+        'SEQNO','TITLE','DESIGNATION','JOIN DATE','SERVICE','INITIALS',
+        'SURNAME','OTHERNAMES','NAME','EPF_NO','NICNO',
+        'ADDRES_LINE01','ADDRES_LINE02','ADDRES_LINE03','ADDRES_LINE04',
+        'HOME_TP','MOBILE NU','OFFICE_TP',
+        'EQPT01_UNIT_PRICE','EQPT01_MODEL','EQPT01_MAKE','EQPT01_TYPE','EQPT01_SINGERITEM',
+        'EQPT02_UNIT_PRICE','EQPT02_MODEL','EQPT02_MAKE','EQPT02_TYPE','EQPT02_SINGERITEM',
+        'EQPT03_UNIT_PRICE','EQPT03_MODEL','EQPT03_MAKE','EQPT03_TYPE','EQPT03_SINGERITEM',
+        'EQPT04_UNIT_PRICE','EQPT04_MODEL','EQPT04_MAKE','EQPT04_TYPE','EQPT04_SINGERITEM',
+        'EQPT05_UNIT_PRICE','EQPT05_MODEL','EQPT05_MAKE','EQPT05_TYPE','EQPT05_SINGERITEM',
+        'CASH PRICE','RENTAL','TERMS',
+        'G1TITLE','G1INITIALS','G1SURNAME','G1EPF_NO','G1NICNO',
+        'G1ADDRES_LINE01','G1ADDRES_LINE02','G1ADDRES_LINE03','G1ADDRES_LINE04',
+        'G1HOME_TP','G1MOBILE','G1OFFICE_TP',
+        'G2TITLE','G2INITIALS','G2SURNAME','G2EPF_NO','G2NICNO',
+        'G2ADDRES_LINE01','G2ADDRES_LINE02','G2ADDRES_LINE03','G2ADDRES_LINE04',
+        'G2HOME_TP','G2MOBILE','G2OFFICE_TP',
+      ]
+
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Orders')
+      ws.columns = colKeys.map(k => ({ header: k, key: k }))
+
+      ws.getRow(1).eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }
+        cell.font = { bold: true }
+      })
+
+      rows.forEach(row => ws.addRow(row))
+
+      const wbBuffer = await wb.xlsx.writeBuffer()
+      const blob     = new Blob([wbBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const fname    = (exportFilename || 'approved-orders').replace(/\.xlsx$/i, '') + '.xlsx'
+
+      if (typeof window.showSaveFilePicker === 'function') {
+        const fh       = await window.showSaveFilePicker({ suggestedName: fname, types: [{ description: 'Excel Files', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] })
+        const writable = await fh.createWritable()
+        await writable.write(blob)
+        await writable.close()
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a   = document.createElement('a')
+        a.href = url; a.download = fname; a.click()
+        URL.revokeObjectURL(url)
+      }
+      setExportOpen(false)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -838,14 +1006,52 @@ export default function OrdersPage() {
         />
       )}
 
+      {exportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5e5]">
+              <h2 className="text-base font-semibold text-[#14213d]">Export Orders</h2>
+              <button onClick={() => setExportOpen(false)} className="p-1 rounded hover:bg-[#f0f0f0] text-[#999]"><X size={16} /></button>
+            </div>
+            <div className="px-5 py-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[#555] uppercase tracking-wider">File Name</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="flex-1 border border-[#d8d8d8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#14213d]"
+                    value={exportFilename}
+                    onChange={e => setExportFilename(e.target.value)}
+                    placeholder="approved-orders"
+                  />
+                  <span className="text-sm text-[#aaa] whitespace-nowrap">.xlsx</span>
+                </div>
+              </div>
+              <p className="text-xs text-[#aaa]">A save dialog will open so you can choose where to save the file.</p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-[#e5e5e5]">
+              <Button variant="secondary" onClick={() => setExportOpen(false)} disabled={exporting}>Cancel</Button>
+              <Button onClick={handleExport} disabled={exporting}>
+                {exporting ? 'Exporting…' : <><Download size={14} className="mr-1.5" />Export</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {view === 'list' ? (
         <>
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-semibold text-[#14213d]">Orders</h1>
-            <Button onClick={() => setView('form')}>
-              <Plus size={15} className="mr-1.5" />
-              Add New Order
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => setExportOpen(true)}>
+                <Download size={14} className="mr-1.5" />
+                Export
+              </Button>
+              <Button onClick={() => setView('form')}>
+                <Plus size={15} className="mr-1.5" />
+                Add New Order
+              </Button>
+            </div>
           </div>
           <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
             <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />

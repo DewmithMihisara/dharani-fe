@@ -2,7 +2,8 @@ import { ArrowLeft, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { apiPost } from '../api/api'
 import { getApprovedItems } from '../api/inventoryApi'
-import { getBranches, getProjectsByBranch, printSingerForm } from '../api/orderApi'
+import { getBranches, getProjectsByBranch } from '../api/orderApi'
+import { printSingerForm } from '../print/printSingerForm'
 import Button from '../components/Button'
 import Combobox from '../components/Combobox'
 import FormSection from '../components/FormSection'
@@ -511,9 +512,9 @@ function ItemsGrid({ items, setItems }) {
                           />
                         </td>
                         <td className="px-4 py-3 text-[#444]">
-                          {LKR(parseFloat(item.discountPct) > 0
+                          {LKR((parseFloat(item.discountPct) > 0
                             ? Math.round(item.price * (1 - parseFloat(item.discountPct) / 100))
-                            : item.price)}
+                            : item.price) * (parseInt(item.qty) || 1))}
                         </td>
                         <td className="px-4 py-3 font-semibold text-[#14213d]">
                           {LKR((item.monthly_rental ?? 0) * (parseInt(item.qty) || 1))}
