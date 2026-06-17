@@ -3,11 +3,13 @@ import Sidebar from '../components/Sidebar'
 import DashboardPage from '../pages/DashboardPage'
 import OrdersPage from '../pages/OrdersPage'
 import InventoryPage from '../pages/InventoryPage'
+import ReportsPage from '../pages/ReportsPage'
 
 const views = {
   home:      DashboardPage,
   orders:    OrdersPage,
   inventory: InventoryPage,
+  reports:   ReportsPage,
 }
 
 export default function AppLayout() {

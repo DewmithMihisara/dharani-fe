@@ -36,3 +36,7 @@ export async function savePartialPayments(orderId, body, token = null) {
 export async function getApprovedOrdersForExport(token = null) {
   return apiGet('/orders/export/approved', token)
 }
+
+export async function getReportData(filters, token = null) {
+  return apiPost('/orders/report', filters, token)
+}

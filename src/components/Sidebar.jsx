@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, Package, LogOut } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut } from 'lucide-react'
 import Logo from './Logo'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -8,6 +8,7 @@ const navItems = [
   { key: 'home',      icon: LayoutDashboard, label: 'Home'      },
   { key: 'orders',    icon: ClipboardList,   label: 'Orders'    },
   { key: 'inventory', icon: Package,         label: 'Inventory' },
+  { key: 'reports',   icon: FileBarChart,    label: 'Reports'   },
 ]
 
 function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
