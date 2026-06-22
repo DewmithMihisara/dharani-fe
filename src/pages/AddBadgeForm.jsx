@@ -4,6 +4,7 @@ import { deleteBadgeItem, getCategories, getItemsByBadge, getItemsByCategory, ge
 import Button from '../components/Button'
 import Combobox from '../components/Combobox'
 import FormSection from '../components/FormSection'
+import ProjectPicker from '../components/ProjectPicker'
 
 function LKR(n) {
   return `LKR ${Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -138,8 +139,9 @@ function apiEntryToForm(e) {
   }
 }
 
-export default function AddBadgeForm({ badge, onBack, onSave }) {
+export default function AddBadgeForm({ badge, initialContext = null, onBack, onSave }) {
   const [form, setForm] = useState(EMPTY)
+  const [ctx, setCtx] = useState(initialContext ?? { companyId: null, companyName: '', branchId: null, branchName: '', projectId: null, projectName: '' })
   const [editItemId, setEditItemId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState([])
@@ -307,6 +309,10 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
 
   async function handleAddItem() {
     const { category, item, model, transferPrice } = form
+    if (!currentBadgeId && !ctx.projectId) {
+      alert('Please select Company, Branch, and Project first.')
+      return
+    }
     if (!category || !item || !model || !transferPrice) {
       alert('Please fill in Category, Item, Model, and Transfer Price.')
       return
@@ -315,6 +321,7 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
     try {
       const dto = {
         badgeId: currentBadgeId,
+        projectId: ctx.projectId,
         item: {
           id: editItemId,
           modelId: form.modelId ?? null,
@@ -406,6 +413,16 @@ export default function AddBadgeForm({ badge, onBack, onSave }) {
           {badge ? `Edit Badge ${badge.badgeNumber}` : currentBadgeId ? 'Add Badge' : 'Add Badge'}
         </h1>
       </div>
+
+      {/* ── Badge Location ── */}
+      {!badge && (
+        <FormSection number="0" title="Badge Location">
+          <ProjectPicker value={ctx} onChange={setCtx} disabled={!!currentBadgeId} excludeEndedProjects />
+          {!!currentBadgeId && (
+            <p className="text-[11px] text-[#999] mt-2">Location is locked once the badge has items.</p>
+          )}
+        </FormSection>
+      )}
 
       {/* ── Section 1: Item Details ── */}
       <FormSection number="1" title="Item Details">

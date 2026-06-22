@@ -8,11 +8,12 @@ import { printReport } from '../print/printReport'
 
 const STATUS_OPTIONS = [
   { value: 'APPROVAL_PROCESSING', label: 'Approval Processing' },
-  { value: 'NOT_APPROVED',        label: 'Not Approved'        },
   { value: 'APPROVED',            label: 'Approved'            },
+  { value: 'NOT_APPROVED',        label: 'Not Approved'        },
   { value: 'IN_PRODUCTION',       label: 'In Production'       },
   { value: 'ON_DELIVERY',         label: 'On Delivery'         },
   { value: 'DELIVERED',           label: 'Delivered'           },
+  { value: 'CANCELED',            label: 'Cancelled'           },
 ]
 const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s.label]))
 

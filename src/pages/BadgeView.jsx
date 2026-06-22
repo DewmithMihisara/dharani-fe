@@ -13,7 +13,7 @@ const HEADER_CHIP = {
 
 const th = 'sticky top-0 bg-[#14213d] px-3 py-3 font-medium whitespace-nowrap text-left'
 
-export default function BadgeView({ badge, onClose, onApprove }) {
+export default function BadgeView({ badge, onClose, onApprove, readOnly = false }) {
   const [approving, setApproving] = useState(false)
   const [items,     setItems]     = useState([])
   const [total,     setTotal]     = useState(0)
@@ -202,7 +202,7 @@ export default function BadgeView({ badge, onClose, onApprove }) {
             >
               Close
             </button>
-            {badge.status === 'PENDING' && (
+            {!readOnly && badge.status === 'PENDING' && (
               <Button type="button" disabled={approving} onClick={handleApprove}>
                 {approving ? 'Approving…' : 'Approve'}
               </Button>

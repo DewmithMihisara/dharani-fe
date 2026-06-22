@@ -5,6 +5,7 @@ const variants = {
   processing:   { label: 'Order Processing',    bg: 'bg-blue-100',     text: 'text-blue-700'   },
   delivery:     { label: 'On Delivery',         bg: 'bg-orange-100',   text: 'text-orange-700' },
   delivered:    { label: 'Delivered',           bg: 'bg-green-100',    text: 'text-green-700'  },
+  canceled:     { label: 'Cancelled',           bg: 'bg-[#e5e7eb]',    text: 'text-[#6b7280]'  },
 }
 
 export default function Badge({ variant, label, className = '' }) {

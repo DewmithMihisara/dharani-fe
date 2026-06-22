@@ -6,7 +6,7 @@ import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
 import OrderSavedDialog from '../components/OrderSavedDialog'
 import NewOrderForm from './NewOrderForm'
-import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus, savePartialPayments, getApprovedOrdersForExport } from '../api/orderApi'
+import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus, savePartialPayments, getApprovedOrdersForExport, getProjectsByBranch } from '../api/orderApi'
 import { printSingerForm } from '../print/printSingerForm'
 import { printPartialInvoice } from '../print/printPartialInvoice'
 import { printPurchaseOrder } from '../print/printPurchaseOrder'
@@ -19,6 +19,7 @@ const STATUS_VARIANT = {
   IN_PRODUCTION:       'processing',
   ON_DELIVERY:         'delivery',
   DELIVERED:           'delivered',
+  CANCELED:            'canceled',
 }
 
 const STATUS_LABELS = {
@@ -28,6 +29,19 @@ const STATUS_LABELS = {
   IN_PRODUCTION:       'In Production',
   ON_DELIVERY:         'On Delivery',
   DELIVERED:           'Delivered',
+  CANCELED:            'Cancelled',
+}
+
+// Order status transition rules (mirrored on the backend OrderServiceImpl).
+const MAIN_PIPELINE   = ['APPROVAL_PROCESSING', 'APPROVED', 'IN_PRODUCTION', 'ON_DELIVERY', 'DELIVERED']
+const CANCELLABLE_FROM = new Set(['APPROVED', 'IN_PRODUCTION', 'ON_DELIVERY'])
+const TERMINAL_STATUSES = new Set(['DELIVERED', 'CANCELED'])
+
+// Remark optional only for a consecutive-forward step; required otherwise (Not-Approved, reverse, Cancel).
+function isRemarkRequired(from, to) {
+  const fi = MAIN_PIPELINE.indexOf(from), ti = MAIN_PIPELINE.indexOf(to)
+  if (fi < 0 || ti < 0) return true
+  return ti !== fi + 1
 }
 
 const EDIT_STATUSES     = new Set(['APPROVAL_PROCESSING', 'NOT_APPROVED'])
@@ -97,6 +111,7 @@ const ALL_STATUS_OPTIONS = [
   { value: 'IN_PRODUCTION',       label: 'IN PRODUCTION',       active: 'border-blue-500 bg-blue-50 text-blue-700',           hover: 'hover:border-blue-400 hover:text-blue-600'       },
   { value: 'ON_DELIVERY',         label: 'ON DELIVERY',         active: 'border-orange-500 bg-orange-50 text-orange-700',     hover: 'hover:border-orange-400 hover:text-orange-600'   },
   { value: 'DELIVERED',           label: 'DELIVERED',           active: 'border-green-500 bg-green-50 text-green-700',        hover: 'hover:border-green-400 hover:text-green-600'     },
+  { value: 'CANCELED',            label: 'CANCELLED',           active: 'border-[#6b7280] bg-[#e5e7eb] text-[#4b5563]',      hover: 'hover:border-[#9ca3af] hover:text-[#6b7280]'     },
 ]
 
 function OrderStatusSection({ o, token, onSaved }) {
@@ -121,18 +136,27 @@ function OrderStatusSection({ o, token, onSaved }) {
   const [driverName, setDriverName] = useState('')
   const [meterEnd, setMeterEnd] = useState('')
 
-  const options = ALL_STATUS_OPTIONS.filter(opt => opt.value !== o.status)
+  const options = ALL_STATUS_OPTIONS.filter(opt =>
+    opt.value !== o.status &&
+    (opt.value !== 'CANCELED' || CANCELLABLE_FROM.has(o.status))
+  )
 
   const deliveryFieldsMissing =
-    (selected === 'ON_DELIVERY' && (!deliveryVehicle.trim() || !meterStart.trim())) ||
-    (selected === 'DELIVERED'   && (!driverName.trim()     || !meterEnd.trim()))
+    selected === 'DELIVERED' &&
+    (!deliveryVehicle.trim() || !meterStart.trim() || !driverName.trim() || !meterEnd.trim())
+
+  const remarkRequired = !!selected && isRemarkRequired(o.status, selected)
 
   async function handleSave() {
-    if (!selected || deliveryFieldsMissing || !statusRemark.trim()) return
+    if (!selected || deliveryFieldsMissing || (remarkRequired && !statusRemark.trim())) return
     setSaving(true)
     const body = { status: selected, remark: statusRemark }
-    if (selected === 'ON_DELIVERY') { body.vehicleNumber = deliveryVehicle; body.meterStart = meterStart }
-    if (selected === 'DELIVERED')   { body.driverName = driverName; body.meterEnd = meterEnd }
+    if (selected === 'DELIVERED') {
+      body.vehicleNumber = deliveryVehicle
+      body.meterStart = meterStart
+      body.driverName = driverName
+      body.meterEnd = meterEnd
+    }
     await updateOrderStatus(o.orderId, body, token)
     let didSavePayments = false
     if (selected === 'NOT_APPROVED' && needsPartialPayment) {
@@ -182,8 +206,8 @@ function OrderStatusSection({ o, token, onSaved }) {
       )}
       <DetailSection title="Order Status">
         <div className="flex flex-col gap-4">
-          {o.status === 'DELIVERED' ? (
-            <p className="text-sm text-[#aaa] italic">Order is delivered. No further status changes allowed.</p>
+          {TERMINAL_STATUSES.has(o.status) ? (
+            <p className="text-sm text-[#aaa] italic">Order is {STATUS_LABELS[o.status]?.toLowerCase()}. No further status changes allowed.</p>
           ) : (<>
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold text-[#555]">Set Status</p>
@@ -204,8 +228,8 @@ function OrderStatusSection({ o, token, onSaved }) {
             </div>
           </div>
 
-          {selected === 'ON_DELIVERY' && (
-            <div className="grid grid-cols-2 gap-3 border-t border-[#f0f0f0] pt-3">
+          {selected === 'DELIVERED' && (
+            <div className="grid grid-cols-4 gap-3 border-t border-[#f0f0f0] pt-3">
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Delivery Vehicle No. <span className="text-red-400">*</span></label>
                 <input
@@ -224,11 +248,6 @@ function OrderStatusSection({ o, token, onSaved }) {
                   placeholder="e.g. 12450"
                 />
               </div>
-            </div>
-          )}
-
-          {selected === 'DELIVERED' && (
-            <div className="grid grid-cols-2 gap-3 border-t border-[#f0f0f0] pt-3">
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Driver Name <span className="text-red-400">*</span></label>
                 <input
@@ -251,7 +270,7 @@ function OrderStatusSection({ o, token, onSaved }) {
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Remark <span className="text-red-400">*</span></label>
+            <label className="text-[10px] font-semibold text-[#aaa] uppercase tracking-widest">Remark {remarkRequired && <span className="text-red-400">*</span>}</label>
             <textarea
               className="w-full border border-[#e5e5e5] rounded-lg px-3 py-2 text-sm text-[#333] resize-none focus:outline-none focus:border-[#14213d]"
               rows={2}
@@ -320,7 +339,7 @@ function OrderStatusSection({ o, token, onSaved }) {
           <div className="flex justify-end">
             <button
               onClick={handleSave}
-              disabled={!selected || saving || deliveryFieldsMissing || !statusRemark.trim()}
+              disabled={!selected || saving || deliveryFieldsMissing || (remarkRequired && !statusRemark.trim())}
               className="px-5 py-2 rounded-lg bg-[#14213d] text-white text-xs font-semibold hover:bg-[#1e2f5a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save'}
@@ -793,7 +812,7 @@ function getInitials(name) {
   return (name || '').split(' ').map(w => w[0]).filter(Boolean).join(' ')
 }
 
-export default function OrdersPage() {
+export default function OrdersPage({ branchId = null, branchName = '', companyLabel = '' }) {
   const [view,      setView]      = useState('list')
   const [orders,    setOrders]    = useState([])
   const [viewOrder, setViewOrder] = useState(null)
@@ -805,14 +824,23 @@ export default function OrdersPage() {
   const [exportOpen,     setExportOpen]     = useState(false)
   const [exportFilename, setExportFilename] = useState('approved-orders')
   const [exporting,      setExporting]      = useState(false)
+  const [exportProjects,  setExportProjects]  = useState([])
+  const [exportProjectId, setExportProjectId] = useState('')
+
+  useEffect(() => {
+    if (!branchId) { setExportProjects([]); return }
+    const token = localStorage.getItem('accessToken')
+    getProjectsByBranch(branchId, token).then(res => setExportProjects(res.data?.projects ?? []))
+  }, [branchId])
 
   const backToList = () => { setEditOrder(null); setView('list'); setRefreshKey(k => k + 1) }
 
   async function handleExport() {
+    if (!exportProjectId) return
     setExporting(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await getApprovedOrdersForExport(token)
+      const res = await getApprovedOrdersForExport(exportProjectId, token)
       if (res.status !== 200) return
       const exportOrders = res.data.orders || []
 
@@ -946,16 +974,17 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
+    if (!branchId) { setOrders([]); setTotal(0); return }
     async function load() {
       const token = localStorage.getItem('accessToken')
-      const data = await getAllOrdersPaginated({ offset, limit, columnName: null, branchIds: [] }, token)
+      const data = await getAllOrdersPaginated({ offset, limit, columnName: null, branchIds: [branchId] }, token)
       if (data.status === 200) {
         setOrders(data.data.orders)
         setTotal(Number(data.data.total))
       }
     }
     load()
-  }, [offset, limit, refreshKey])
+  }, [offset, limit, refreshKey, branchId])
 
   function handleLimitChange(newLimit) {
     setLimit(newLimit)
@@ -1015,6 +1044,19 @@ export default function OrdersPage() {
             </div>
             <div className="px-5 py-5 flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[#555] uppercase tracking-wider">Project <span className="text-red-400">*</span></label>
+                <select
+                  className="border border-[#d8d8d8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#14213d] cursor-pointer"
+                  value={exportProjectId}
+                  onChange={e => setExportProjectId(e.target.value)}
+                >
+                  <option value="">Select project…</option>
+                  {exportProjects.map(p => (
+                    <option key={p.id} value={String(p.id)}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-[#555] uppercase tracking-wider">File Name</label>
                 <div className="flex items-center gap-2">
                   <input
@@ -1030,7 +1072,7 @@ export default function OrdersPage() {
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-[#e5e5e5]">
               <Button variant="secondary" onClick={() => setExportOpen(false)} disabled={exporting}>Cancel</Button>
-              <Button onClick={handleExport} disabled={exporting}>
+              <Button onClick={handleExport} disabled={exporting || !exportProjectId}>
                 {exporting ? 'Exporting…' : <><Download size={14} className="mr-1.5" />Export</>}
               </Button>
             </div>
@@ -1041,38 +1083,57 @@ export default function OrdersPage() {
       {view === 'list' ? (
         <>
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-semibold text-[#14213d]">Orders</h1>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => setExportOpen(true)}>
-                <Download size={14} className="mr-1.5" />
-                Export
-              </Button>
-              <Button onClick={() => setView('form')}>
-                <Plus size={15} className="mr-1.5" />
-                Add New Order
-              </Button>
+            <div>
+              <h1 className="text-2xl font-semibold text-[#14213d]">Orders</h1>
+              {branchId && (
+                <p className="text-sm text-[#fca311] font-medium mt-0.5">{companyLabel || branchName}</p>
+              )}
             </div>
+            {branchId && (
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => setExportOpen(true)}>
+                  <Download size={14} className="mr-1.5" />
+                  Export
+                </Button>
+                <Button onClick={() => setView('form')}>
+                  <Plus size={15} className="mr-1.5" />
+                  Add New Order
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
-            <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-            <PaginationBar
-              offset={offset}
-              limit={limit}
-              total={total}
-              onLimitChange={handleLimitChange}
-              onPrev={handlePrev}
-              onNext={handleNext}
-            />
-          </div>
+          {branchId ? (
+            <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
+              <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
+              <PaginationBar
+                offset={offset}
+                limit={limit}
+                total={total}
+                onLimitChange={handleLimitChange}
+                onPrev={handlePrev}
+                onNext={handleNext}
+              />
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-[#d8d8d8] p-12 text-center">
+              <p className="text-sm text-[#777]">Select a company and branch from the <span className="font-semibold text-[#14213d]">Orders</span> menu to view orders.</p>
+            </div>
+          )}
         </>
       ) : view === 'edit' ? (
         <NewOrderForm
           onBack={backToList}
           initialData={editOrder}
           orderId={editOrder?.orderId}
+          branchId={branchId}
+          companyLabel={companyLabel}
         />
       ) : (
-        <NewOrderForm onBack={backToList} />
+        <NewOrderForm
+          onBack={backToList}
+          branchId={branchId}
+          companyLabel={companyLabel}
+        />
       )}
     </div>
   )

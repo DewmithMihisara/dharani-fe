@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Eye } from 'lucide-react'
+import { Plus, Pencil, Eye, Upload } from 'lucide-react'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AddBadgeForm from './AddBadgeForm'
 import BadgeView from './BadgeView'
+import ProjectPicker from '../components/ProjectPicker'
+import BadgeUploadDialog from '../components/BadgeUploadDialog'
 import { getBadgesPaginated, endBadge } from '../api/inventoryApi'
 
 const iconBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
@@ -17,7 +19,7 @@ const STATUS_CHIP = {
 
 // ── Inventory table ───────────────────────────────────────────────────────────
 
-function InventoryTable({ badges, onEdit, onView, onEnd }) {
+function InventoryTable({ badges, onEdit, onView, onEnd, readOnly }) {
   if (badges.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[#d8d8d8] py-16 text-center">
@@ -54,9 +56,11 @@ function InventoryTable({ badges, onEdit, onView, onEnd }) {
               </td>
               <td className="px-5 py-3.5">
                 <div className="flex items-center justify-end gap-1">
-                  <button className={iconBtn} title="Edit" onClick={() => onEdit(badge)}><Pencil size={15} /></button>
+                  {!readOnly && (
+                    <button className={iconBtn} title="Edit" onClick={() => onEdit(badge)}><Pencil size={15} /></button>
+                  )}
                   <button className={iconBtn} title="View" onClick={() => onView(badge)}><Eye    size={15} /></button>
-                  {badge.status === 'APPROVED' && (
+                  {!readOnly && badge.status === 'APPROVED' && (
                     <button className={endBtn} onClick={() => onEnd(badge.id)}>End</button>
                   )}
                 </div>
@@ -72,26 +76,35 @@ function InventoryTable({ badges, onEdit, onView, onEnd }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
-  const [view,      setView]      = useState('list')
-  const [editBadge, setEditBadge] = useState(null)
-  const [viewBadge, setViewBadge] = useState(null)
+  const [view,       setView]       = useState('list')
+  const [editBadge,  setEditBadge]  = useState(null)
+  const [viewBadge,  setViewBadge]  = useState(null)
+  const [showUpload, setShowUpload] = useState(false)
   const [badges,    setBadges]    = useState([])
   const [dialog,    setDialog]    = useState(null)
   const [offset,    setOffset]    = useState(0)
   const [limit,     setLimit]     = useState(10)
   const [total,     setTotal]     = useState(0)
+  const [filter,    setFilter]    = useState({ companyId: null, companyName: '', branchId: null, branchName: '', projectId: null, projectName: '', projectEnded: false })
 
   const token = localStorage.getItem('accessToken')
+  const readOnly = !!filter.projectEnded
 
   async function loadBadges(off = offset, lim = limit) {
-    const res = await getBadgesPaginated({ offset: off, limit: lim }, token)
+    if (!filter.projectId) { setBadges([]); setTotal(0); return }
+    const res = await getBadgesPaginated({ offset: off, limit: lim, projectId: filter.projectId }, token)
     if (res.status === 200) {
       setBadges(res.data.badges ?? [])
       setTotal(res.data.total ?? 0)
     }
   }
 
-  useEffect(() => { loadBadges(offset, limit) }, [offset, limit])
+  useEffect(() => { loadBadges(offset, limit) }, [offset, limit, filter.projectId])
+
+  function handleFilterChange(next) {
+    setFilter(next)
+    setOffset(0)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / limit))
   const currentPage = Math.floor(offset / limit) + 1
@@ -137,6 +150,7 @@ export default function InventoryPage() {
     <div className="p-8">
       <AddBadgeForm
         badge={editBadge}
+        initialContext={filter}
         onBack={handleBack}
         onSave={handleSave}
       />
@@ -147,20 +161,47 @@ export default function InventoryPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-[#14213d]">Inventory</h1>
-        <Button onClick={() => setView('form')}>
-          <Plus size={15} className="mr-1.5" />
-          Add Badge
-        </Button>
+        {!readOnly && (
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setShowUpload(true)}>
+              <Upload size={15} className="mr-1.5" />
+              Upload by Excel
+            </Button>
+            <Button onClick={() => setView('form')}>
+              <Plus size={15} className="mr-1.5" />
+              Add Badge
+            </Button>
+          </div>
+        )}
       </div>
 
-      <InventoryTable
-        badges={badges}
-        onEdit={badge => { setEditBadge(badge); setView('form') }}
-        onView={handleView}
-        onEnd={handleEnd}
-      />
+      {/* Filter */}
+      <div className="bg-white rounded-xl border border-[#d8d8d8] p-4 mb-4">
+        <ProjectPicker value={filter} onChange={handleFilterChange} />
+      </div>
+
+      {readOnly && filter.projectId && (
+        <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#f0f0f0] border border-[#e0e0e0] text-xs text-[#888]">
+          This project has ended — its badges are read-only. You can view them but not add, edit, approve or end badges.
+        </div>
+      )}
+
+      {filter.projectId ? (
+        <InventoryTable
+          badges={badges}
+          onEdit={badge => { setEditBadge(badge); setView('form') }}
+          onView={handleView}
+          onEnd={handleEnd}
+          readOnly={readOnly}
+        />
+      ) : (
+        <div className="bg-white rounded-xl border border-[#d8d8d8] py-16 text-center">
+          <p className="text-sm text-[#bbb]">Select a company, branch and project to view badges.</p>
+        </div>
+      )}
 
       {/* Pagination bar */}
+      {filter.projectId && (
       <div className="flex items-center justify-between px-1 pt-4 text-xs text-[#666]">
         <span>
           {total === 0 ? 'No badges' : `Showing ${from}–${to} of ${total} badge${total !== 1 ? 's' : ''}`}
@@ -191,12 +232,14 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+      )}
 
       {viewBadge && (
         <BadgeView
           badge={viewBadge}
           onClose={() => setViewBadge(null)}
           onApprove={handleApprove}
+          readOnly={readOnly}
         />
       )}
 
@@ -205,6 +248,13 @@ export default function InventoryPage() {
           message={dialog.message}
           onConfirm={() => { dialog.onConfirm(); closeDialog() }}
           onCancel={closeDialog}
+        />
+      )}
+
+      {showUpload && (
+        <BadgeUploadDialog
+          onClose={() => { setShowUpload(false); loadBadges(offset, limit) }}
+          onUploaded={badge => { setShowUpload(false); setViewBadge(badge); loadBadges(offset, limit) }}
         />
       )}
     </div>

@@ -1,13 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './api'
 
-export async function saveBadge(dto, token = null) {
-  return apiPost('/inventory/badges', dto, token)
-}
-
-export async function getBadges(token = null) {
-  return apiGet('/inventory/badges', token)
-}
-
 export async function getBadgesPaginated(pagination, token = null) {
   return apiPost('/inventory/badges/all', pagination, token)
 }
@@ -36,12 +28,16 @@ export async function getModelsByItem(itemId, token = null) {
   return apiGet(`/inventory/models?itemId=${itemId}`, token)
 }
 
-export async function getApprovedItems(token = null) {
-  return apiGet('/inventory/approved-items', token)
+export async function getApprovedItems(projectId, token = null) {
+  return apiGet(`/inventory/approved-items?projectId=${projectId}`, token)
 }
 
 export async function saveItem(dto, token = null) {
   return apiPost('/inventory/badges/item', dto, token)
+}
+
+export async function uploadBadge(dto, token = null) {
+  return apiPost('/inventory/badges/upload', dto, token)
 }
 
 export async function getItemsByBadge(badgeId, pagination, token = null) {

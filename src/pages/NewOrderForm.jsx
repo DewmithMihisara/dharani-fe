@@ -2,10 +2,9 @@ import { ArrowLeft, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { apiPost } from '../api/api'
 import { getApprovedItems } from '../api/inventoryApi'
-import { getBranches, getProjectsByBranch } from '../api/orderApi'
+import { getProjectsByBranch } from '../api/orderApi'
 import { printSingerForm } from '../print/printSingerForm'
 import Button from '../components/Button'
-import Combobox from '../components/Combobox'
 import FormSection from '../components/FormSection'
 import Input from '../components/Input'
 import OrderSavedDialog from '../components/OrderSavedDialog'
@@ -269,7 +268,7 @@ function AddressGroup({ label, baseKey, form, setForm, cols = 4 }) {
   )
 }
 
-function ItemsGrid({ items, setItems }) {
+function ItemsGrid({ items, setItems, projectId }) {
   const [catalogue, setCatalogue] = useState([])
   const [catalogueError, setCatalogueError] = useState(false)
   const [selCategory, setSelCategory] = useState('')
@@ -285,13 +284,14 @@ function ItemsGrid({ items, setItems }) {
   }, [])
 
   useEffect(() => {
+    if (!projectId) { setCatalogue([]); setCatalogueError(false); return }
     const token = localStorage.getItem('accessToken')
-    getApprovedItems(token).then(res => {
+    getApprovedItems(projectId, token).then(res => {
       const list = res.data?.items ?? []
       setCatalogue(list)
       setCatalogueError(list.length === 0)
     })
-  }, [])
+  }, [projectId])
 
   useEffect(() => {
     if (catalogue.length === 0) return
@@ -381,34 +381,38 @@ function ItemsGrid({ items, setItems }) {
   const selBase = 'w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none transition-colors duration-100'
   const selEnabled = `${selBase} border-[#e5e5e5] bg-white text-[#000] focus:border-[#14213d] cursor-pointer`
   const selDis = `${selBase} border-[#e5e5e5] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
+  const noCatalogue = !projectId || catalogueError
 
   return (
     <div className="flex flex-col gap-4">
-      {catalogueError && (
-        <p className="text-xs text-red-500">Items not available — no approved badge found.</p>
+      {!projectId && (
+        <p className="text-xs text-[#888]">Select a project to load items.</p>
+      )}
+      {projectId && catalogueError && (
+        <p className="text-xs text-red-500">Items not available — no approved badge found for this project.</p>
       )}
 
       <div className={`grid ${showSizeDropdown ? 'grid-cols-4' : 'grid-cols-3'} gap-3`}>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[#222]">Category</label>
-          <select value={selCategory} onChange={handleCategorySelect} disabled={catalogueError}
-            className={catalogueError ? selDis : selEnabled}>
+          <select value={selCategory} onChange={handleCategorySelect} disabled={noCatalogue}
+            className={noCatalogue ? selDis : selEnabled}>
             <option value="">Select category…</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[#222]">Item</label>
-          <select value={selItem} onChange={handleItemSelect} disabled={!selCategory || catalogueError}
-            className={(!selCategory || catalogueError) ? selDis : selEnabled}>
+          <select value={selItem} onChange={handleItemSelect} disabled={!selCategory || noCatalogue}
+            className={(!selCategory || noCatalogue) ? selDis : selEnabled}>
             <option value="">Select item…</option>
             {filteredItems.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-[#222]">Model</label>
-          <select value={selModelId} onChange={handleModelSelect} disabled={!selItem || catalogueError}
-            className={(!selItem || catalogueError) ? selDis : selEnabled}>
+          <select value={selModelId} onChange={handleModelSelect} disabled={!selItem || noCatalogue}
+            className={(!selItem || noCatalogue) ? selDis : selEnabled}>
             <option value="">Select model…</option>
             {filteredModels.map(m => (
               <option key={m.modelId} value={m.modelId}>{m.modelName}</option>
@@ -778,8 +782,10 @@ function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors, addres
   )
 }
 
-export default function NewOrderForm({ onBack, initialData = null, orderId = null }) {
-  const [form, setForm] = useState(initialData ? apiToFormState(initialData) : INITIAL_FORM)
+export default function NewOrderForm({ onBack, initialData = null, orderId = null, branchId = null, companyLabel = '' }) {
+  const [form, setForm] = useState(
+    initialData ? apiToFormState(initialData) : { ...INITIAL_FORM, companyName: companyLabel }
+  )
   const [items, setItems] = useState(
     initialData?.items
       ? initialData.items.map(i => {
@@ -820,27 +826,19 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
       remark: i.remark || '',
     })) ?? []
   )
-  const [branches, setBranches] = useState([])
   const [branchProjects, setBranchProjects] = useState([])
-  const [selectedBranchId, setSelectedBranchId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [errors, setErrors] = useState({})
   const [savedOrder, setSavedOrder] = useState(null)
 
   useEffect(() => {
+    if (branchId == null) return
     const token = localStorage.getItem('accessToken')
-    getBranches(token).then(res => setBranches(res.data?.branches ?? []))
-    getProjectsByBranch(null, token).then(res => setBranchProjects(res.data?.projects ?? []))
-  }, [])
-
-  useEffect(() => {
-    if (selectedBranchId == null) return
-    const token = localStorage.getItem('accessToken')
-    getProjectsByBranch(selectedBranchId, token).then(res =>
+    getProjectsByBranch(branchId, token, true).then(res =>
       setBranchProjects(res.data?.projects ?? [])
     )
-  }, [selectedBranchId])
+  }, [branchId])
 
   const f = (key, extra) => {
     const base = field(form, setForm, key, extra)
@@ -918,29 +916,12 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
             <SubGroup label="Employment">
               <div className="grid grid-cols-4 gap-2">
                 <div className="col-span-2 flex flex-col gap-1">
-                  <label className="text-xs font-medium text-[#222]">Company / Employer</label>
-                  <Combobox
-                    value={form.companyName}
-                    options={branches.map(b => ({ id: b.id, label: b.name }))}
-                    onChange={(label, id) => {
-                      setForm(f => ({ ...f, companyName: label, projectId: '' }))
-                      setSelectedBranchId(id)
-                    }}
-                    placeholder="Search company…"
-                    className="w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-[#222]">Project</label>
                   <select
                     value={form.projectId}
                     onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
                     required
-                    disabled={!form.companyName}
-                    className={!form.companyName
-                      ? "w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#bbb] cursor-not-allowed"
-                      : "w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100 cursor-pointer"
-                    }
+                    className="w-full px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] focus:outline-none focus:border-[#14213d] transition-colors duration-100 cursor-pointer"
                   >
                     <option value="">Select project…</option>
                     {branchProjects.map(p => (
@@ -948,7 +929,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                     ))}
                   </select>
                 </div>
-                <Input label="Employee ID"              {...f('employeeId')} placeholder="Emp. number" />
+                <Input label="Employee ID"              {...f('employeeId')} className="col-span-2" placeholder="Emp. number" />
                 <Input label="Department & Designation" {...f('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-2" />
                 <div className="col-span-2 flex items-end gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
@@ -1033,7 +1014,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
         {/* ── Section 3: Items Grid ── */}
         <FormSection number="3" title="Items (Furniture)">
-          <ItemsGrid items={items} setItems={setItems} />
+          <ItemsGrid items={items} setItems={setItems} projectId={form.projectId} />
         </FormSection>
 
         {/* ── Section 4: Singer Items ── */}
