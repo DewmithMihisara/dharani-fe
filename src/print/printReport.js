@@ -1,7 +1,7 @@
 // A4 portrait print for the Reports tab. Receives already-fetched data (no re-fetch)
 // — the report endpoint is a POST with filters and ReportsPage already holds the data.
 
-export function printReport(reportType, rows, meta, totalSales) {
+export function printReport(reportType, rows, meta, totalSales, priceLabel = 'Selling Price') {
   const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
   const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
@@ -17,16 +17,20 @@ export function printReport(reportType, rows, meta, totalSales) {
     `<div class="mr"><span class="ml">${esc(k)}</span><span>:</span><span class="mv">${esc(v)}</span></div>`
   ).join('')
 
-  const itemRows = (rows || []).map((r, i) => `
+  const itemRows = (rows || []).map(r => {
+    const leadCells = r._groupStart ? `
+      <td class="c" rowspan="${r._groupSize}">${r._groupSeq}</td>
+      <td rowspan="${r._groupSize}">${esc(r.empNo)}</td>
+      <td rowspan="${r._groupSize}">${esc(r.empName)}</td>` : ''
+    return `
     <tr>
-      <td class="c">${i + 1}</td>
-      <td>${esc(r.empNo)}</td>
-      <td>${esc(r.empName)}</td>
+      ${leadCells}
       <td>${esc(r.item)}</td>
       <td>${esc(r.model)}</td>
       <td class="r">${fmt(r.sellingPrice)}</td>
       <td class="r">${fmt(r.totalPrice)}</td>
-    </tr>`).join('')
+    </tr>`
+  }).join('')
 
   const detailTable = `
     <table class="items">
@@ -37,7 +41,7 @@ export function printReport(reportType, rows, meta, totalSales) {
           <th>Emp Name</th>
           <th>Item</th>
           <th>Model</th>
-          <th style="width:100px">Selling Price</th>
+          <th style="width:100px">${esc(priceLabel)}</th>
           <th style="width:100px">Total Price</th>
         </tr>
       </thead>

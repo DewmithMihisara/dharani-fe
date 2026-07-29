@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import Card from '../components/Card'
@@ -14,6 +14,26 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
+  const passwordRef = useRef(null)
+
+  useEffect(() => {
+    if (localStorage.getItem('accessToken')) {
+      navigate('/app', { replace: true })
+    }
+  }, [navigate])
+
+  function handleUsernameKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      passwordRef.current?.focus()
+    }
+  }
+
+  function handlePasswordKeyDown(e) {
+    if (e.key === 'Enter') {
+      handleSubmit(e)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -28,7 +48,7 @@ export default function LoginPage() {
       if (data.status === 200) {
         localStorage.setItem('accessToken', data.data.accessToken)
         localStorage.setItem('refreshToken', data.data.refreshToken)
-        navigate('/app')
+        navigate('/app', { replace: true })
       } else {
         setError(data.message || 'Login failed. Please try again.')
       }
@@ -55,6 +75,7 @@ export default function LoginPage() {
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
+              onKeyDown={handleUsernameKeyDown}
               placeholder="Enter your username"
               autoComplete="username"
             />
@@ -64,9 +85,11 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   id="password"
+                  ref={passwordRef}
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  onKeyDown={handlePasswordKeyDown}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   className="w-full px-4 py-2.5 pr-10 rounded-lg border border-[#e5e5e5] bg-white text-sm text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100"

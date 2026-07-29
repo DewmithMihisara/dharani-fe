@@ -4,6 +4,7 @@ export default function Input({
   type = 'text',
   value,
   onChange,
+  onKeyDown,
   placeholder,
   autoComplete,
   required = false,
@@ -24,6 +25,7 @@ export default function Input({
         type={type}
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}

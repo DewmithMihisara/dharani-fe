@@ -10,6 +10,8 @@ export async function printDeliveryNote(orderId, token = null) {
   const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString('en-LK') : ''
   const d = o.delivery || {}
 
+  const onDeliveryRemark = (o.history || []).find(h => h.status === 'ON_DELIVERY')?.remark?.trim() || ''
+
   const addrParts = [o.permanentAddress1, o.permanentAddress2, o.permanentAddress3, o.permanentAddress4].filter(Boolean)
   const addrLine1 = addrParts.slice(0, 2).join(', ')
   const addrLine2 = addrParts.slice(2).join(', ')
@@ -109,6 +111,7 @@ table.items tfoot td{border:1px solid #000;padding:2px 4px;font-weight:bold}
 .sl{white-space:nowrap}
 .sv{border-bottom:1px solid #000}
 .dotrow{border-bottom:1px dotted #000;min-height:14px;margin-bottom:2px}
+.note-text{font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 
 .warranty{text-align:center;font-style:italic;font-size:9px;color:#000!important;margin:2px 0}
 
@@ -183,9 +186,11 @@ table.items tfoot td{border:1px solid #000;padding:2px 4px;font-weight:bold}
   <div class="bb">
     <div class="bb-hdr">Special Notes</div>
     <div class="bb-body">
+      ${onDeliveryRemark
+        ? `<div class="note-text">${onDeliveryRemark}</div>`
+        : `<div class="dotrow"></div>
       <div class="dotrow"></div>
-      <div class="dotrow"></div>
-      <div class="dotrow"></div>
+      <div class="dotrow"></div>`}
     </div>
   </div>
   <div class="bb">

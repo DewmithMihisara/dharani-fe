@@ -1,19 +1,37 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import LicenseLockDialog from '../components/LicenseLockDialog'
 import DashboardPage from '../pages/DashboardPage'
 import OrdersPage from '../pages/OrdersPage'
 import InventoryPage from '../pages/InventoryPage'
+import FreeItemsPage from '../pages/FreeItemsPage'
 import ReportsPage from '../pages/ReportsPage'
 import CompanyManagementPage from '../pages/CompanyManagementPage'
 import BranchManagementPage from '../pages/BranchManagementPage'
 import ProjectManagementPage from '../pages/ProjectManagementPage'
+import { isProgramLocked } from '../utils/licenseLock'
 
 export default function AppLayout() {
+  const navigate = useNavigate()
   const [activeView, setActiveView] = useState('home')
   const [orderContext, setOrderContext] = useState(null)
   const [navVersion, setNavVersion] = useState(0)
 
   const bumpNav = () => setNavVersion(v => v + 1)
+
+  if (isProgramLocked()) {
+    return (
+      <LicenseLockDialog
+        variant="full"
+        onLogout={() => {
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+          navigate('/login', { replace: true })
+        }}
+      />
+    )
+  }
 
   function handleNavigate(view, ctx) {
     setActiveView(view)
@@ -31,8 +49,10 @@ export default function AppLayout() {
             companyLabel={orderContext?.companyLabel ?? ''}
           />
         )
-      case 'inventory':
+      case 'inventory-selling':
         return <InventoryPage />
+      case 'inventory-free':
+        return <FreeItemsPage />
       case 'reports':
         return <ReportsPage />
       case 'company':

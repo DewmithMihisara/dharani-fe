@@ -49,3 +49,7 @@ export async function getApprovedOrdersForExport(projectId, token = null) {
 export async function getReportData(filters, token = null) {
   return apiPost('/orders/report', filters, token)
 }
+
+export async function getFreeItemVoucher(dto, token = null) {
+  return apiPost('/orders/free-item-voucher', dto, token)
+}

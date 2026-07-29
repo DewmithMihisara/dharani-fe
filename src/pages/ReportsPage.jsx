@@ -17,11 +17,33 @@ const STATUS_OPTIONS = [
 ]
 const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s.label]))
 
+// Groups consecutive rows that belong to the same customer (same order) so Emp No / Emp Name / #
+// can be rendered/merged once per group instead of once per item row.
+function annotateCustomerGroups(rows) {
+  const out = []
+  let seq = 0
+  let groupStartIdx = -1
+  for (const r of rows) {
+    const prev = out[out.length - 1]
+    const sameCustomer = prev && prev.empNo === r.empNo && prev.empName === r.empName
+    if (sameCustomer) {
+      out[groupStartIdx]._groupSize++
+      out.push({ ...r, _groupStart: false, _groupSeq: seq })
+    } else {
+      seq++
+      groupStartIdx = out.length
+      out.push({ ...r, _groupStart: true, _groupSeq: seq, _groupSize: 1 })
+    }
+  }
+  return out
+}
+
 const inputCls = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
 const disabledSelectCls = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#bbb] cursor-not-allowed'
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState('detail') // 'detail' | 'summary'
+  const [priceBasis, setPriceBasis] = useState('SELLING') // 'SELLING' | 'TRANSFER'
 
   const [branches, setBranches]               = useState([])
   const [branchProjects, setBranchProjects]   = useState([])
@@ -59,6 +81,7 @@ export default function ReportsPage() {
       status,
       startDate: startDate || null,
       endDate:   endDate   || null,
+      useTransferPrice: priceBasis === 'TRANSFER',
     }, token)
 
     if (res.status !== 200) {
@@ -66,7 +89,7 @@ export default function ReportsPage() {
       return null
     }
 
-    const rows = res.data.rows || []
+    const rows = annotateCustomerGroups(res.data.rows || [])
     const meta = {
       company:   res.data.company   || companyName,
       project:   res.data.project   || '',
@@ -84,10 +107,11 @@ export default function ReportsPage() {
     try {
       const data = await fetchReport()
       if (!data) return
+      const priceLabel = priceBasis === 'TRANSFER' ? 'Transfer Price' : 'Selling Price'
       if (format === 'print') {
-        printReport(reportType, data.rows, data.meta, data.totalSales)
+        printReport(reportType, data.rows, data.meta, data.totalSales, priceLabel)
       } else {
-        await buildAndSaveWorkbook(reportType, data.rows, data.meta, data.totalSales)
+        await buildAndSaveWorkbook(reportType, data.rows, data.meta, data.totalSales, priceLabel)
       }
     } catch (e) {
       setError(e.message || 'Failed to generate report.')
@@ -115,6 +139,24 @@ export default function ReportsPage() {
           title="Summary Report"
           desc="Only the Total Sales figure for the selected filters."
           onClick={() => setReportType('summary')}
+        />
+      </div>
+
+      {/* Price basis selector */}
+      <div className="grid grid-cols-2 gap-3 max-w-2xl mb-6">
+        <ReportTypeCard
+          active={priceBasis === 'SELLING'}
+          icon={FileSpreadsheet}
+          title="Selling Price"
+          desc="Price each item at the customer-facing selling price."
+          onClick={() => setPriceBasis('SELLING')}
+        />
+        <ReportTypeCard
+          active={priceBasis === 'TRANSFER'}
+          icon={FileBarChart}
+          title="Transfer Price"
+          desc="Price each item at the internal transfer price instead."
+          onClick={() => setPriceBasis('TRANSFER')}
         />
       </div>
 
@@ -219,7 +261,7 @@ function ReportTypeCard({ active, icon: Icon, title, desc, onClick }) {
 
 const MONEY_FMT = '#,##0.00'
 
-async function buildAndSaveWorkbook(reportType, rows, meta, totalSales) {
+async function buildAndSaveWorkbook(reportType, rows, meta, totalSales, priceLabel = 'Selling Price') {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(reportType === 'detail' ? 'Detail Report' : 'Summary Report')
   ws.columns = [{ width: 16 }, { width: 28 }, { width: 22 }, { width: 22 }, { width: 16 }, { width: 16 }]
@@ -239,19 +281,33 @@ async function buildAndSaveWorkbook(reportType, rows, meta, totalSales) {
   ws.addRow([]) // spacer
 
   if (reportType === 'detail') {
-    const headerRow = ws.addRow(['Emp No', 'Emp Name', 'Item', 'Model', 'Selling Price', 'Total Price'])
+    const headerRow = ws.addRow(['Emp No', 'Emp Name', 'Item', 'Model', priceLabel, 'Total Price'])
     headerRow.eachCell(cell => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }
       cell.font = { bold: true }
     })
 
+    const dataStartRow = ws.rowCount + 1
     rows.forEach(r => {
       const row = ws.addRow([
-        r.empNo || '', r.empName || '', r.item || '', r.model || '',
+        r._groupStart ? (r.empNo || '') : '',
+        r._groupStart ? (r.empName || '') : '',
+        r.item || '', r.model || '',
         Number(r.sellingPrice || 0), Number(r.totalPrice || 0),
       ])
       row.getCell(5).numFmt = MONEY_FMT
       row.getCell(6).numFmt = MONEY_FMT
+    })
+
+    rows.forEach((r, idx) => {
+      if (r._groupStart && r._groupSize > 1) {
+        const top = dataStartRow + idx
+        const bottom = top + r._groupSize - 1
+        ws.mergeCells(top, 1, bottom, 1)
+        ws.mergeCells(top, 2, bottom, 2)
+        ws.getCell(top, 1).alignment = { vertical: 'middle' }
+        ws.getCell(top, 2).alignment = { vertical: 'middle' }
+      }
     })
   }
 

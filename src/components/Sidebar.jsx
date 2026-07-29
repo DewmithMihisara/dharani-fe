@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import Logo from './Logo'
 import ConfirmDialog from './ConfirmDialog'
+import LicenseLockDialog from './LicenseLockDialog'
 import { getCompanies, getBranchesByCompany } from '../api/orderApi'
+import { isReportLocked } from '../utils/licenseLock'
 
 const navItems = [
-  { key: 'home',      icon: LayoutDashboard, label: 'Home'      },
-  { key: 'inventory', icon: Package,         label: 'Inventory' },
-  { key: 'reports',   icon: FileBarChart,    label: 'Reports'   },
+  { key: 'home',    icon: LayoutDashboard, label: 'Home'    },
+  { key: 'reports', icon: FileBarChart,    label: 'Reports' },
 ]
 
 function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
@@ -30,13 +31,16 @@ function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
 export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
   const navigate = useNavigate()
   const [showLogout, setShowLogout] = useState(false)
+  const [showReportLock, setShowReportLock] = useState(false)
 
   const [ordersOpen, setOrdersOpen]               = useState(false)
+  const [ordersExpanded, setOrdersExpanded]       = useState(false)  // true once open transition has settled (controls overflow)
   const [companies, setCompanies]                 = useState(null)   // null = not loaded yet
   const [branchesByCompany, setBranchesByCompany] = useState({})     // { [companyId]: OptionDto[] | undefined }
   const [hoverCompanyId, setHoverCompanyId]       = useState(null)
 
   const [companyMgmtOpen, setCompanyMgmtOpen]     = useState(false)
+  const [inventoryMgmtOpen, setInventoryMgmtOpen] = useState(false)
 
   const token = localStorage.getItem('accessToken')
 
@@ -50,11 +54,41 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navVersion])
 
+  function closeOrdersPanel() {
+    setOrdersOpen(false)
+    setOrdersExpanded(false)
+    setHoverCompanyId(null)
+  }
+
   function toggleOrders() {
     const next = !ordersOpen
-    setOrdersOpen(next)
-    if (next && companies == null) {
-      getCompanies(token).then(res => setCompanies(res.data?.companies ?? []))
+    if (next) {
+      setOrdersOpen(true)
+      setCompanyMgmtOpen(false)
+      setInventoryMgmtOpen(false)
+      if (companies == null) {
+        getCompanies(token).then(res => setCompanies(res.data?.companies ?? []))
+      }
+    } else {
+      closeOrdersPanel()
+    }
+  }
+
+  function toggleCompanyMgmt() {
+    const next = !companyMgmtOpen
+    setCompanyMgmtOpen(next)
+    if (next) {
+      closeOrdersPanel()
+      setInventoryMgmtOpen(false)
+    }
+  }
+
+  function toggleInventoryMgmt() {
+    const next = !inventoryMgmtOpen
+    setInventoryMgmtOpen(next)
+    if (next) {
+      closeOrdersPanel()
+      setCompanyMgmtOpen(false)
     }
   }
 
@@ -74,11 +108,18 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
       companyName: company.name,
       companyLabel: `${company.name} - ${branch.name}`,
     })
-    setOrdersOpen(false)
-    setHoverCompanyId(null)
+    closeOrdersPanel()
   }
 
   const ordersActive = activeView === 'orders'
+
+  function handleNavClick(key) {
+    if (key === 'reports' && isReportLocked()) {
+      setShowReportLock(true)
+      return
+    }
+    onNavigate(key)
+  }
 
   return (
     <aside className="w-60 h-full bg-[#14213d] flex flex-col px-4 py-6 shrink-0">
@@ -110,15 +151,17 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
             <ChevronDown
               size={16}
               strokeWidth={1.8}
-              className={`ml-auto transition-transform duration-150 ${ordersOpen ? 'rotate-180' : ''}`}
+              className={`ml-auto transition-transform duration-300 ${ordersOpen ? 'rotate-180' : ''}`}
             />
           </button>
 
-          {ordersOpen && (
-            <div
-              className="mt-1 flex flex-col gap-0.5 pl-3"
-              onMouseLeave={() => setHoverCompanyId(null)}
-            >
+          <div
+            className={`flex flex-col gap-0.5 pl-3 transition-all duration-300 ease-in-out ${
+              ordersOpen ? 'max-h-80 opacity-100 mt-1' : 'max-h-0 opacity-0 mt-0'
+            } ${ordersExpanded ? 'overflow-visible' : 'overflow-hidden'}`}
+            onTransitionEnd={e => { if (e.propertyName === 'max-height' && ordersOpen) setOrdersExpanded(true) }}
+            onMouseLeave={() => setHoverCompanyId(null)}
+          >
               {companies == null && (
                 <div className="px-3 py-2 text-xs text-white/40">Loading…</div>
               )}
@@ -168,14 +211,13 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
                   </div>
                 )
               })}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Company Management — sub-menus: Company / Branch / Projects */}
         <div>
           <button
-            onClick={() => setCompanyMgmtOpen(o => !o)}
+            onClick={toggleCompanyMgmt}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
               ['company', 'branch', 'projects'].includes(activeView)
                 ? 'bg-[#fca311] text-[#14213d]'
@@ -187,12 +229,15 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
             <ChevronDown
               size={16}
               strokeWidth={1.8}
-              className={`ml-auto transition-transform duration-150 ${companyMgmtOpen ? 'rotate-180' : ''}`}
+              className={`ml-auto transition-transform duration-300 ${companyMgmtOpen ? 'rotate-180' : ''}`}
             />
           </button>
 
-          {companyMgmtOpen && (
-            <div className="mt-1 flex flex-col gap-0.5 pl-3">
+          <div
+            className={`flex flex-col gap-0.5 pl-3 overflow-hidden transition-all duration-300 ease-in-out ${
+              companyMgmtOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0 mt-0'
+            }`}
+          >
               {[
                 { key: 'company',  label: 'Company'  },
                 { key: 'branch',   label: 'Branch'   },
@@ -210,8 +255,50 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
                   {sub.label}
                 </button>
               ))}
-            </div>
-          )}
+          </div>
+        </div>
+
+        {/* Inventory — sub-menus: Selling Items / Free Items */}
+        <div>
+          <button
+            onClick={toggleInventoryMgmt}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+              ['inventory-selling', 'inventory-free'].includes(activeView)
+                ? 'bg-[#fca311] text-[#14213d]'
+                : 'text-white/60 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Package size={18} strokeWidth={1.8} />
+            Inventory
+            <ChevronDown
+              size={16}
+              strokeWidth={1.8}
+              className={`ml-auto transition-transform duration-300 ${inventoryMgmtOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          <div
+            className={`flex flex-col gap-0.5 pl-3 overflow-hidden transition-all duration-300 ease-in-out ${
+              inventoryMgmtOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0 mt-0'
+            }`}
+          >
+              {[
+                { key: 'inventory-selling', label: 'Selling Items' },
+                { key: 'inventory-free',    label: 'Free Items'    },
+              ].map(sub => (
+                <button
+                  key={sub.key}
+                  onClick={() => onNavigate(sub.key)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors duration-150 cursor-pointer ${
+                    activeView === sub.key
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/55 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+          </div>
         </div>
 
         {navItems.filter(i => i.key !== 'home').map(item => (
@@ -221,7 +308,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
             icon={item.icon}
             label={item.label}
             isActive={activeView === item.key}
-            onNavigate={onNavigate}
+            onNavigate={handleNavClick}
           />
         ))}
       </nav>
@@ -242,10 +329,14 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
           onConfirm={() => {
             localStorage.removeItem('accessToken')
             localStorage.removeItem('refreshToken')
-            navigate('/login')
+            navigate('/login', { replace: true })
           }}
           onCancel={() => setShowLogout(false)}
         />
+      )}
+
+      {showReportLock && (
+        <LicenseLockDialog variant="feature" onClose={() => setShowReportLock(false)} />
       )}
     </aside>
   )

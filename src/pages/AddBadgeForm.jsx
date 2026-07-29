@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Combobox from '../components/Combobox'
 import FormSection from '../components/FormSection'
 import ProjectPicker from '../components/ProjectPicker'
+import { capitalizeWords } from '../utils/text'
 
 function LKR(n) {
   return `LKR ${Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -276,7 +277,8 @@ export default function AddBadgeForm({ badge, initialContext = null, onBack, onS
   }
 
   function handleCategoryChange(value, id) {
-    setForm(prev => ({ ...prev, category: value, item: '', model: '', modelId: null }))
+    const v = capitalizeWords(value)
+    setForm(prev => ({ ...prev, category: v, item: '', model: '', modelId: null }))
     setSelectedCatId(id)
     setSelectedItemId(null)
     setItemOptions([])
@@ -290,7 +292,8 @@ export default function AddBadgeForm({ badge, initialContext = null, onBack, onS
   }
 
   function handleItemChange(value, id) {
-    setForm(prev => ({ ...prev, item: value, model: '', modelId: null }))
+    const v = capitalizeWords(value)
+    setForm(prev => ({ ...prev, item: v, model: '', modelId: null }))
     setSelectedItemId(id)
     setModelOptions([])
     if (id) {
@@ -304,7 +307,7 @@ export default function AddBadgeForm({ badge, initialContext = null, onBack, onS
   }
 
   function handleModelChange(value, id, size) {
-    setForm(prev => ({ ...prev, model: value, modelId: id ?? null, ...(size ? { size } : {}) }))
+    setForm(prev => ({ ...prev, model: value.toUpperCase(), modelId: id ?? null, ...(size ? { size } : {}) }))
   }
 
   async function handleAddItem() {
@@ -482,7 +485,7 @@ export default function AddBadgeForm({ badge, initialContext = null, onBack, onS
             <label className="text-sm font-medium text-[#222]">Name <span className="text-[#999] font-normal">(optional)</span></label>
             <input
               value={form.name}
-              onChange={setField('name')}
+              onChange={e => setForm(prev => ({ ...prev, name: capitalizeWords(e.target.value) }))}
               placeholder="Custom item name"
               className={inp}
             />

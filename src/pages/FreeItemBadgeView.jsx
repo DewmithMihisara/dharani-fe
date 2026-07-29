@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Search } from 'lucide-react'
 import Button from '../components/Button'
-import { approveBadge, getItemsByBadge } from '../api/inventoryApi'
+import { approveFreeItemBadge, getFreeItemsByBadge } from '../api/freeItemApi'
 
 function LKR(n) { return `LKR ${Number(n).toLocaleString('en-LK')}` }
 
@@ -13,7 +13,7 @@ const HEADER_CHIP = {
 
 const th = 'sticky top-0 bg-[#14213d] px-3 py-3 font-medium whitespace-nowrap text-left'
 
-export default function BadgeView({ badge, onClose, onApprove, readOnly = false }) {
+export default function FreeItemBadgeView({ badge, onClose, onApprove, readOnly = false }) {
   const [approving, setApproving] = useState(false)
   const [items,     setItems]     = useState([])
   const [total,     setTotal]     = useState(0)
@@ -34,7 +34,7 @@ export default function BadgeView({ badge, onClose, onApprove, readOnly = false 
     async function load() {
       setLoading(true)
       try {
-        const res = await getItemsByBadge(badge.id, { offset, limit, search: searchTerm }, token)
+        const res = await getFreeItemsByBadge(badge.id, { offset, limit, search: searchTerm }, token)
         if (res.status === 200) {
           setItems(res.data.items ?? [])
           setTotal(res.data.total ?? 0)
@@ -54,7 +54,7 @@ export default function BadgeView({ badge, onClose, onApprove, readOnly = false 
   async function handleApprove() {
     setApproving(true)
     try {
-      const res = await approveBadge(badge.id, token)
+      const res = await approveFreeItemBadge(badge.id, token)
       if (res.status === 200) onApprove(badge.id)
       else alert(res.message || 'Failed to approve badge')
     } finally {
@@ -72,7 +72,7 @@ export default function BadgeView({ badge, onClose, onApprove, readOnly = false 
           {/* Header */}
           <div className="bg-[#14213d] rounded-t-2xl px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-white font-bold text-sm">Badge {badge.badgeNumber}</span>
+              <span className="text-white font-bold text-sm">Badge {badge.freeItemBadgeNumber}</span>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${HEADER_CHIP[badge.status]}`}>
                 {badge.status}
               </span>
@@ -126,24 +126,16 @@ export default function BadgeView({ badge, onClose, onApprove, readOnly = false 
                       <th className={th}>Category</th>
                       <th className={th}>Item</th>
                       <th className={th}>Model</th>
-                      <th className={th}>Name</th>
                       <th className={th}>Size</th>
-                      <th className={th}>Transfer Price</th>
-                      <th className={th}>Admin Cost</th>
-                      <th className={th}>S&amp;P</th>
-                      <th className={th}>Transport</th>
-                      <th className={th}>Total Cost</th>
+                      <th className={th}>Name</th>
+                      <th className={th}>Supplier</th>
                       <th className={th}>Price</th>
-                      <th className={th}>6M</th>
-                      <th className={th}>12M</th>
-                      <th className={th}>18M</th>
-                      <th className={th}>24M</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={16} className="px-3 py-6 text-center text-sm text-[#bbb]">Loading…</td>
+                        <td colSpan={8} className="px-3 py-6 text-center text-sm text-[#bbb]">Loading…</td>
                       </tr>
                     ) : items.map((e, i) => (
                       <tr
@@ -153,33 +145,13 @@ export default function BadgeView({ badge, onClose, onApprove, readOnly = false 
                         }`}
                       >
                         <td className="px-3 py-2 text-center text-xs text-[#ccc] font-medium">{offset + i + 1}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.category}</td>
-                        <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{e.itemName}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.modelName}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.name || '—'}</td>
+                        <td className="px-3 py-2 text-[#555]">{e.productCategory}</td>
+                        <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{e.item}</td>
+                        <td className="px-3 py-2 text-[#555]">{e.model}</td>
                         <td className="px-3 py-2 text-[#555]">{e.size || '—'}</td>
-                        <td className="px-3 py-2 text-[#444] whitespace-nowrap">{LKR(e.transferPrice)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[#444]">{LKR(e.adminCost)}</div>
-                          <div className="text-[10px] text-[#999]">{e.adminCostPct}%</div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[#444]">{LKR(e.salesAndPromotion)}</div>
-                          <div className="text-[10px] text-[#999]">{e.salesAndPromotionPct}%</div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[#444]">{LKR(e.transport)}</div>
-                          <div className="text-[10px] text-[#999]">{e.transportPct}%</div>
-                        </td>
-                        <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{LKR(e.totalCost)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="font-bold text-[#14213d]">{LKR(e.price)}</div>
-                          <div className="text-[10px] text-[#999]">Tax {e.taxPct}%</div>
-                        </td>
-                        <td className="px-3 py-2 text-[#555]">{e.month6  || '—'}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.month12 || '—'}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.month18 || '—'}</td>
-                        <td className="px-3 py-2 text-[#555]">{e.month24 || '—'}</td>
+                        <td className="px-3 py-2 text-[#555]">{e.name || '—'}</td>
+                        <td className="px-3 py-2 text-[#555]">{e.supplierName}</td>
+                        <td className="px-3 py-2 font-semibold text-[#14213d] whitespace-nowrap">{LKR(e.price)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Eye, Upload } from 'lucide-react'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
-import AddBadgeForm from './AddBadgeForm'
-import BadgeView from './BadgeView'
+import AddFreeItemBadgeForm from './AddFreeItemBadgeForm'
+import FreeItemBadgeView from './FreeItemBadgeView'
 import ProjectPicker from '../components/ProjectPicker'
-import BadgeUploadDialog from '../components/BadgeUploadDialog'
-import { getBadgesPaginated, endBadge } from '../api/inventoryApi'
+import FreeItemUploadDialog from '../components/FreeItemUploadDialog'
+import { getFreeItemBadgesPaginated, endFreeItemBadge } from '../api/freeItemApi'
 
 const iconBtn = 'p-1.5 rounded-md transition-colors duration-100 text-[#999] hover:text-[#14213d] hover:bg-[#f0f0f0] cursor-pointer'
 const endBtn  = 'px-2.5 py-1 rounded-md text-xs font-medium transition-colors duration-100 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
@@ -17,9 +17,9 @@ const STATUS_CHIP = {
   ENDED:    'bg-[#f0f0f0] text-[#888] border border-[#e0e0e0]',
 }
 
-// ── Inventory table ───────────────────────────────────────────────────────────
+// ── Free item badge table ───────────────────────────────────────────────────
 
-function InventoryTable({ badges, onEdit, onView, onEnd, readOnly }) {
+function FreeItemBadgeTable({ badges, onEdit, onView, onEnd, readOnly }) {
   if (badges.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[#d8d8d8] py-16 text-center">
@@ -47,7 +47,7 @@ function InventoryTable({ badges, onEdit, onView, onEnd, readOnly }) {
                 i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'
               }`}
             >
-              <td className="px-5 py-3.5 font-semibold text-[#14213d]">{badge.badgeNumber}</td>
+              <td className="px-5 py-3.5 font-semibold text-[#14213d]">{badge.freeItemBadgeNumber}</td>
               <td className="px-5 py-3.5 text-[#555]">{badge.items?.length ?? 0}</td>
               <td className="px-5 py-3.5">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${STATUS_CHIP[badge.status] ?? ''}`}>
@@ -75,7 +75,7 @@ function InventoryTable({ badges, onEdit, onView, onEnd, readOnly }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function InventoryPage() {
+export default function FreeItemsPage() {
   const [view,       setView]       = useState('list')
   const [editBadge,  setEditBadge]  = useState(null)
   const [viewBadge,  setViewBadge]  = useState(null)
@@ -92,7 +92,7 @@ export default function InventoryPage() {
 
   async function loadBadges(off = offset, lim = limit) {
     if (!filter.projectId) { setBadges([]); setTotal(0); return }
-    const res = await getBadgesPaginated({ offset: off, limit: lim, projectId: filter.projectId }, token)
+    const res = await getFreeItemBadgesPaginated({ offset: off, limit: lim, projectId: filter.projectId }, token)
     if (res.status === 200) {
       setBadges(res.data.badges ?? [])
       setTotal(res.data.total ?? 0)
@@ -131,7 +131,7 @@ export default function InventoryPage() {
 
   function handleEnd(id) {
     confirm('End this badge?', async () => {
-      const res = await endBadge(id, token)
+      const res = await endFreeItemBadge(id, token)
       if (res.status === 200) {
         loadBadges(offset, limit)
       } else {
@@ -148,7 +148,7 @@ export default function InventoryPage() {
 
   if (view === 'form') return (
     <div className="p-8">
-      <AddBadgeForm
+      <AddFreeItemBadgeForm
         badge={editBadge}
         initialContext={filter}
         onBack={handleBack}
@@ -160,7 +160,7 @@ export default function InventoryPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-[#14213d]">Selling Items</h1>
+        <h1 className="text-xl font-semibold text-[#14213d]">Free Items</h1>
         {!readOnly && (
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => setShowUpload(true)}>
@@ -187,7 +187,7 @@ export default function InventoryPage() {
       )}
 
       {filter.projectId ? (
-        <InventoryTable
+        <FreeItemBadgeTable
           badges={badges}
           onEdit={badge => { setEditBadge(badge); setView('form') }}
           onView={handleView}
@@ -235,7 +235,7 @@ export default function InventoryPage() {
       )}
 
       {viewBadge && (
-        <BadgeView
+        <FreeItemBadgeView
           badge={viewBadge}
           onClose={() => setViewBadge(null)}
           onApprove={handleApprove}
@@ -252,7 +252,7 @@ export default function InventoryPage() {
       )}
 
       {showUpload && (
-        <BadgeUploadDialog
+        <FreeItemUploadDialog
           onClose={() => { setShowUpload(false); loadBadges(offset, limit) }}
           onUploaded={badge => { setShowUpload(false); setViewBadge(badge); loadBadges(offset, limit) }}
         />

@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { apiPost } from '../api/api'
 import { getApprovedItems } from '../api/inventoryApi'
+import { getApprovedFreeItems } from '../api/freeItemApi'
 import { getProjectsByBranch } from '../api/orderApi'
 import { printSingerForm } from '../print/printSingerForm'
 import Button from '../components/Button'
@@ -9,6 +10,8 @@ import FormSection from '../components/FormSection'
 import Input from '../components/Input'
 import OrderSavedDialog from '../components/OrderSavedDialog'
 import Select from '../components/Select'
+import { isValidNic, extractNicInfo } from '../utils/nic'
+import { capitalizeWords, buildFullNameWithInitials } from '../utils/text'
 
 const DURATION_OPTIONS = [
   { value: '6', label: '6 months' },
@@ -72,6 +75,9 @@ function validate(form) {
     'g2_mobileNumber', 'g2_landlineNumber',
   ]
   phoneKeys.forEach(k => { if (form[k] && HAS_LETTER.test(form[k])) errs[k] = 'Phone number cannot contain letters' })
+
+  const nicKeys = ['nicNumber', 'g1_nicNumber', 'g2_nicNumber']
+  nicKeys.forEach(k => { if (form[k] && !isValidNic(form[k])) errs[k] = 'Invalid NIC number' })
 
   return errs
 }
@@ -152,7 +158,7 @@ function apiToFormState(data) {
   }
 }
 
-function buildPayload(form, items, singerItems, id = null) {
+function buildPayload(form, items, singerItems, freeItems, id = null) {
   const or = v => v || null
   return {
     id: id,
@@ -225,11 +231,17 @@ function buildPayload(form, items, singerItems, id = null) {
     singerItems: singerItems.map(r => ({
       itemName: r.itemName,
       model: r.model,
+      make: r.make || null,
       pricePerItem: parseFloat(r.value) || 0,
       monthlyPerItem: parseFloat(r.monthly) || 0,
       qty: parseInt(r.qty) || 1,
       amount: (parseFloat(r.monthly) || 0) * (parseInt(r.qty) || 1),
       remark: r.remark || null,
+    })),
+
+    freeItems: freeItems.map(r => ({
+      freeItemFreeItemBadgeId: Number(r.freeItemFreeItemBadgeId),
+      qty: parseInt(r.qty) || 1,
     })),
   }
 }
@@ -251,7 +263,7 @@ function SectionDivider() {
 
 function AddressGroup({ label, baseKey, form, setForm, cols = 4 }) {
   const val = n => form[`${baseKey}${n}`] ?? ''
-  const onChange = n => e => setForm(prev => ({ ...prev, [`${baseKey}${n}`]: e.target.value }))
+  const onChange = n => e => setForm(prev => ({ ...prev, [`${baseKey}${n}`]: capitalizeWords(e.target.value) }))
   return (
     <div className="flex flex-col gap-1">
       <p className="text-xs font-medium text-[#222]">
@@ -574,7 +586,7 @@ function ItemsGrid({ items, setItems, projectId }) {
 
 function SingerItemsSection({ singerItems, setSingerItems }) {
   const [open, setOpen] = useState(false)
-  const [row, setRow] = useState({ itemName: '', model: '', value: '', monthly: '', qty: '' })
+  const [row, setRow] = useState({ itemName: '', model: '', make: '', value: '', monthly: '', qty: '' })
   const [addError, setAddError] = useState('')
 
   function handleAdd() {
@@ -588,12 +600,13 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
     setSingerItems(prev => [...prev, {
       itemName: row.itemName.trim(),
       model: row.model.trim(),
+      make: row.make.trim(),
       value: parseFloat(row.value) || 0,
       monthly,
       qty,
       remark: '',
     }])
-    setRow({ itemName: '', model: '', value: '', monthly: '', qty: '' })
+    setRow({ itemName: '', model: '', make: '', value: '', monthly: '', qty: '' })
     setAddError('')
   }
 
@@ -635,7 +648,7 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
 
       {open && (
         <div className="px-6 pb-6 flex flex-col gap-4 border-t border-[#f0f0f0]">
-          <div className="grid grid-cols-5 gap-2 pt-4">
+          <div className="grid grid-cols-6 gap-2 pt-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-[#222]">Item Name</label>
               <input value={row.itemName} onChange={e => setRow(r => ({ ...r, itemName: e.target.value }))} placeholder="Item name" className={fieldCls} />
@@ -643,6 +656,10 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-[#222]">Model</label>
               <input value={row.model} onChange={e => setRow(r => ({ ...r, model: e.target.value }))} placeholder="Model" className={fieldCls} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#222]">Make</label>
+              <input value={row.make} onChange={e => setRow(r => ({ ...r, make: e.target.value }))} placeholder="Make" className={fieldCls} />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-[#222]">Value</label>
@@ -677,6 +694,7 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
                   <tr className="bg-[#f5f5f5] text-[#555] text-left">
                     <th className="px-4 py-2.5 font-medium">Item Name</th>
                     <th className="px-4 py-2.5 font-medium">Model</th>
+                    <th className="px-4 py-2.5 font-medium">Make</th>
                     <th className="px-4 py-2.5 font-medium">Value</th>
                     <th className="px-4 py-2.5 font-medium">Monthly</th>
                     <th className="px-4 py-2.5 font-medium text-center w-16">Qty</th>
@@ -692,6 +710,7 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
                         <tr className={rowCls}>
                           <td className="px-4 py-3 text-[#222] font-medium">{item.itemName}</td>
                           <td className="px-4 py-3 text-[#666]">{item.model}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.make || '—'}</td>
                           <td className="px-4 py-3 text-[#444]">{LKR(item.value)}</td>
                           <td className="px-4 py-3 font-semibold text-[#14213d]">{LKR(item.monthly)}</td>
                           <td className="px-4 py-3 text-center">
@@ -716,7 +735,7 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
                           </td>
                         </tr>
                         <tr className={rowCls}>
-                          <td colSpan={7} className="px-4 pb-3 pt-0">
+                          <td colSpan={8} className="px-4 pb-3 pt-0">
                             <textarea
                               value={item.remark}
                               onChange={e => handleRemarkChange(i, e.target.value)}
@@ -733,7 +752,7 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
                 {singerItems.length > 1 && (
                   <tfoot>
                     <tr className="border-t-2 border-[#e5e5e5] bg-[#f9f9f9]">
-                      <td colSpan={5} className="px-4 py-3 text-sm font-medium text-[#555]">Total Monthly Installment</td>
+                      <td colSpan={6} className="px-4 py-3 text-sm font-medium text-[#555]">Total Monthly Installment</td>
                       <td className="px-4 py-3 font-bold text-[#14213d]">
                         {LKR(singerItems.reduce((sum, i) => sum + (i.monthly || 0) * (i.qty || 1), 0))}
                       </td>
@@ -741,6 +760,219 @@ function SingerItemsSection({ singerItems, setSingerItems }) {
                     </tr>
                   </tfoot>
                 )}
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FreeItemsSection({ freeItems, setFreeItems, projectId }) {
+  const [open, setOpen] = useState(false)
+  const [catalogue, setCatalogue] = useState([])
+  const [catalogueError, setCatalogueError] = useState(false)
+  const [selSupplier, setSelSupplier] = useState('')
+  const [selCategory, setSelCategory] = useState('')
+  const [selItem, setSelItem] = useState('')
+  const [selBadgeId, setSelBadgeId] = useState('')
+  const [selQty, setSelQty] = useState(1)
+  const [addError, setAddError] = useState('')
+
+  useEffect(() => {
+    if (!projectId) { setCatalogue([]); setCatalogueError(false); return }
+    const token = localStorage.getItem('accessToken')
+    getApprovedFreeItems(projectId, token).then(res => {
+      const list = res.data?.items ?? []
+      setCatalogue(list)
+      setCatalogueError(list.length === 0)
+    })
+  }, [projectId])
+
+  const suppliers = [...new Set(catalogue.map(c => c.supplierName))]
+  const filteredCategories = [...new Set(
+    catalogue.filter(c => c.supplierName === selSupplier).map(c => c.productCategory)
+  )]
+  const filteredItems = [...new Set(
+    catalogue.filter(c => c.supplierName === selSupplier && c.productCategory === selCategory).map(c => c.item)
+  )]
+  const filteredModels = catalogue.filter(
+    c => c.supplierName === selSupplier && c.productCategory === selCategory && c.item === selItem
+  )
+
+  function handleSupplierSelect(e) { setSelSupplier(e.target.value); setSelCategory(''); setSelItem(''); setSelBadgeId(''); setAddError('') }
+  function handleCategorySelect(e) { setSelCategory(e.target.value); setSelItem(''); setSelBadgeId(''); setAddError('') }
+  function handleItemSelect(e) { setSelItem(e.target.value); setSelBadgeId(''); setAddError('') }
+  function handleModelSelect(e) { setSelBadgeId(e.target.value); setAddError('') }
+
+  function handleAdd() {
+    const entry = catalogue.find(c => String(c.freeItemFreeItemBadgeId) === String(selBadgeId))
+    if (!entry) { setAddError('Please select a model.'); return }
+    if (freeItems.find(i => i.freeItemFreeItemBadgeId === entry.freeItemFreeItemBadgeId)) {
+      setAddError('This item is already added.')
+      return
+    }
+    const qty = Math.max(1, parseInt(selQty) || 1)
+    setFreeItems(prev => [...prev, { ...entry, qty }])
+    setSelSupplier(''); setSelCategory(''); setSelItem(''); setSelBadgeId(''); setSelQty(1); setAddError('')
+  }
+
+  function handleRemove(badgeId) {
+    setFreeItems(prev => prev.filter(i => i.freeItemFreeItemBadgeId !== badgeId))
+  }
+
+  function handleQtyChange(badgeId, val) {
+    setFreeItems(prev => prev.map(i =>
+      i.freeItemFreeItemBadgeId === badgeId ? { ...i, qty: Math.max(1, parseInt(val) || 1) } : i
+    ))
+  }
+
+  const selBase = 'w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none transition-colors duration-100'
+  const selEnabled = `${selBase} border-[#e5e5e5] bg-white text-[#000] focus:border-[#14213d] cursor-pointer`
+  const selDis = `${selBase} border-[#e5e5e5] bg-[#fafafa] text-[#bbb] cursor-not-allowed`
+  const noCatalogue = !projectId || catalogueError
+
+  return (
+    <div className="bg-white border border-[#e5e5e5] rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#fafafa] transition-colors cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-[#aaa] uppercase tracking-widest mr-1">5</span>
+          <h2 className="text-sm font-semibold text-[#14213d]">Free Item</h2>
+          {freeItems.length > 0 && (
+            <span className="text-xs text-[#888]">({freeItems.length} item{freeItems.length !== 1 ? 's' : ''})</span>
+          )}
+        </div>
+        <ChevronDown
+          size={18}
+          className={`text-[#aaa] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="px-6 pb-6 flex flex-col gap-4 border-t border-[#f0f0f0]">
+          {!projectId && (
+            <p className="text-xs text-[#888] pt-4">Select a project to load free items.</p>
+          )}
+          {projectId && catalogueError && (
+            <p className="text-xs text-red-500 pt-4">Free items not available — no approved free item badge found for this project.</p>
+          )}
+
+          <div className="grid grid-cols-4 gap-3 pt-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#222]">Supplier</label>
+              <select value={selSupplier} onChange={handleSupplierSelect} disabled={noCatalogue}
+                className={noCatalogue ? selDis : selEnabled}>
+                <option value="">Select supplier…</option>
+                {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#222]">Category</label>
+              <select value={selCategory} onChange={handleCategorySelect} disabled={!selSupplier || noCatalogue}
+                className={(!selSupplier || noCatalogue) ? selDis : selEnabled}>
+                <option value="">Select category…</option>
+                {filteredCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#222]">Item</label>
+              <select value={selItem} onChange={handleItemSelect} disabled={!selCategory || noCatalogue}
+                className={(!selCategory || noCatalogue) ? selDis : selEnabled}>
+                <option value="">Select item…</option>
+                {filteredItems.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-[#222]">Model</label>
+              <select value={selBadgeId} onChange={handleModelSelect} disabled={!selItem || noCatalogue}
+                className={(!selItem || noCatalogue) ? selDis : selEnabled}>
+                <option value="">Select model…</option>
+                {filteredModels.map(m => (
+                  <option key={m.freeItemFreeItemBadgeId} value={m.freeItemFreeItemBadgeId}>
+                    {m.model}{m.size ? ` (${m.size})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[#222]">Qty</label>
+              <input
+                type="number"
+                value={selQty}
+                onChange={e => setSelQty(e.target.value)}
+                className="w-16 px-2 py-1.5 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] text-center focus:outline-none focus:border-[#14213d] transition-colors duration-100"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#14213d] text-white text-sm font-medium hover:bg-[#fca311] hover:text-[#14213d] transition-colors duration-150 cursor-pointer whitespace-nowrap self-end"
+            >
+              <Plus size={15} />
+              Add Free Item
+            </button>
+            {addError && <p className="text-xs text-red-500 self-end mb-2">{addError}</p>}
+          </div>
+
+          {freeItems.length > 0 && (
+            <div className="border border-[#e5e5e5] rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#f5f5f5] text-[#555] text-left">
+                    <th className="px-4 py-2.5 font-medium">Category</th>
+                    <th className="px-4 py-2.5 font-medium">Item</th>
+                    <th className="px-4 py-2.5 font-medium">Model</th>
+                    <th className="px-4 py-2.5 font-medium">Size</th>
+                    <th className="px-4 py-2.5 font-medium">Name</th>
+                    <th className="px-4 py-2.5 font-medium">Supplier</th>
+                    <th className="px-4 py-2.5 font-medium text-center w-16">Qty</th>
+                    <th className="px-4 py-2.5 font-medium">Price</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {freeItems.map((item, i) => {
+                    const rowCls = `border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`
+                    return (
+                      <tr key={item.freeItemFreeItemBadgeId} className={rowCls}>
+                        <td className="px-4 py-3 text-[#222] font-medium">{item.productCategory}</td>
+                        <td className="px-4 py-3 text-[#666]">{item.item}</td>
+                        <td className="px-4 py-3 text-[#666]">{item.model}</td>
+                        <td className="px-4 py-3 text-[#666]">{item.size || '—'}</td>
+                        <td className="px-4 py-3 text-[#666]">{item.name || '—'}</td>
+                        <td className="px-4 py-3 text-[#666]">{item.supplierName}</td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty ?? 1}
+                            onChange={e => handleQtyChange(item.freeItemFreeItemBadgeId, e.target.value)}
+                            className="w-14 px-2 py-1 text-xs border border-[#e5e5e5] rounded-md text-center focus:outline-none focus:border-[#14213d] bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[#14213d]">Free</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(item.freeItemFreeItemBadgeId)}
+                            className="text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Remove item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
               </table>
             </div>
           )}
@@ -761,6 +993,24 @@ function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors, addres
     }
   }
   const phone = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9\s+\-]/g, '') } }) } }
+  const cap = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: capitalizeWords(e.target.value) } }) } }
+  const nameField = key => {
+    const b = f(key)
+    return {
+      ...b,
+      onChange: e => {
+        const v = capitalizeWords(e.target.value)
+        b.onChange({ target: { value: v } })
+        setForm(prev => ({
+          ...prev,
+          [`${prefix}_fullNameWithInitials`]: buildFullNameWithInitials(
+            key === 'surname' ? v : prev[`${prefix}_surname`],
+            key === 'otherNames' ? v : prev[`${prefix}_otherNames`],
+          ),
+        }))
+      },
+    }
+  }
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-4 gap-2">
@@ -768,9 +1018,9 @@ function GuarantorFields({ prefix, form, setForm, errors = {}, setErrors, addres
         <Input label="Employee ID" {...f('employeeId')} placeholder="Emp ID" className="col-span-3" />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <Input label="Surname"                 {...f('surname')} placeholder="Surname" />
-        <Input label="Other Names"             {...f('otherNames')} placeholder="Other names" />
-        <Input label="Full Name with Initials" {...f('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
+        <Input label="Surname"                 {...nameField('surname')} placeholder="Surname" />
+        <Input label="Other Names"             {...nameField('otherNames')} placeholder="Other names" />
+        <Input label="Full Name with Initials" {...cap('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <Input label="NIC Number"    {...f('nicNumber')} placeholder="NIC" />
@@ -820,10 +1070,23 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
     initialData?.singerItems?.map(i => ({
       itemName: i.item_name,
       model: i.model,
+      make: i.make || '',
       value: Number(i.price_per_item || 0),
       monthly: Number(i.monthly_per_item || 0),
       qty: i.qty || 1,
       remark: i.remark || '',
+    })) ?? []
+  )
+  const [freeItems, setFreeItems] = useState(
+    initialData?.freeItems?.map(i => ({
+      freeItemFreeItemBadgeId: i.freeItemFreeItemBadgeId,
+      productCategory: i.category,
+      item: i.itemName,
+      model: i.model,
+      size: i.size,
+      name: i.name,
+      supplierName: i.supplierName,
+      qty: i.qty || 1,
     })) ?? []
   )
   const [branchProjects, setBranchProjects] = useState([])
@@ -851,6 +1114,38 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
   const phone = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: e.target.value.replace(/[^0-9\s+\-]/g, '') } }) } }
 
+  const cap = key => { const b = f(key); return { ...b, onChange: e => b.onChange({ target: { value: capitalizeWords(e.target.value) } }) } }
+
+  const nameField = key => {
+    const b = f(key)
+    return {
+      ...b,
+      onChange: e => {
+        const v = capitalizeWords(e.target.value)
+        b.onChange({ target: { value: v } })
+        setForm(prev => ({
+          ...prev,
+          fullNameWithInitials: buildFullNameWithInitials(
+            key === 'surname' ? v : prev.surname,
+            key === 'otherNames' ? v : prev.otherNames,
+          ),
+        }))
+      },
+    }
+  }
+
+  const nic = key => {
+    const b = f(key)
+    return {
+      ...b,
+      onChange: e => {
+        b.onChange(e)
+        const info = extractNicInfo(e.target.value)
+        if (info) setForm(prev => ({ ...prev, dateOfBirth: info.dateOfBirth }))
+      },
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (items.length === 0) { setError('Please add at least one item.'); return }
@@ -865,7 +1160,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const data = await apiPost('/orders', buildPayload(form, items, singerItems, orderId), token)
+      const data = await apiPost('/orders', buildPayload(form, items, singerItems, freeItems, orderId), token)
       if (data.status === 200) {
         if (orderId) {
           onBack()
@@ -930,7 +1225,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                   </select>
                 </div>
                 <Input label="Employee ID"              {...f('employeeId')} className="col-span-2" placeholder="Emp. number" />
-                <Input label="Department & Designation" {...f('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-2" />
+                <Input label="Department & Designation" {...cap('departmentAndDesignation')} placeholder="Dept — Designation" className="col-span-2" />
                 <div className="col-span-2 flex items-end gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
                     <label className="text-xs font-medium text-[#222]">Employment Start Date</label>
@@ -955,10 +1250,10 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-5 gap-2">
                   <Select label="Title"                   {...f('title')} options={TITLE_OPTIONS} />
-                  <Input label="Surname"                 {...f('surname')} placeholder="Surname" />
-                  <Input label="Other Names"             {...f('otherNames')} placeholder="Other names" />
-                  <Input label="NIC Number"              {...f('nicNumber')} placeholder="National ID" />
-                  <Input label="Full Name with Initials" {...f('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
+                  <Input label="Surname"                 {...nameField('surname')} placeholder="Surname" />
+                  <Input label="Other Names"             {...nameField('otherNames')} placeholder="Other names" />
+                  <Input label="NIC Number"              {...nic('nicNumber')} placeholder="National ID" />
+                  <Input label="Full Name with Initials" {...cap('fullNameWithInitials')} placeholder="e.g. A. B. Perera" />
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   <Input label="Date of Birth"  {...f('dateOfBirth')} type="date" max={TODAY} />
@@ -968,7 +1263,7 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
                 </div>
                 {form.maritalStatus === 'Married' && (
                   <div className="grid grid-cols-3 gap-2">
-                    <Input label="Spouse Name"           {...f('spouseName')} placeholder="Spouse full name" className="col-span-2" />
+                    <Input label="Spouse Name"           {...cap('spouseName')} placeholder="Spouse full name" className="col-span-2" />
                     <Input label="Spouse Contact Number" {...phone('spouseContactNumber')} type="tel" placeholder="07X XXX XXXX" />
                   </div>
                 )}
@@ -1019,6 +1314,9 @@ export default function NewOrderForm({ onBack, initialData = null, orderId = nul
 
         {/* ── Section 4: Singer Items ── */}
         <SingerItemsSection singerItems={singerItems} setSingerItems={setSingerItems} />
+
+        {/* ── Section 5: Free Item ── */}
+        <FreeItemsSection freeItems={freeItems} setFreeItems={setFreeItems} projectId={form.projectId} />
 
         {/* ── Monthly Summary ── */}
         {singerItems.length > 0 && (

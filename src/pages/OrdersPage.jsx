@@ -1,16 +1,19 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X, Download } from 'lucide-react'
+import { Plus, Eye, Pencil, Printer, ClipboardList, Truck, Receipt, Trash2, X, Download, Search } from 'lucide-react'
 import ExcelJS from 'exceljs'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
 import OrderSavedDialog from '../components/OrderSavedDialog'
+import ProjectPicker from '../components/ProjectPicker'
 import NewOrderForm from './NewOrderForm'
-import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus, savePartialPayments, getApprovedOrdersForExport, getProjectsByBranch } from '../api/orderApi'
+import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus, savePartialPayments, getApprovedOrdersForExport, getProjectsByBranch, getFreeItemVoucher } from '../api/orderApi'
+import { getSuppliers } from '../api/freeItemApi'
 import { printSingerForm } from '../print/printSingerForm'
 import { printPartialInvoice } from '../print/printPartialInvoice'
 import { printPurchaseOrder } from '../print/printPurchaseOrder'
 import { printDeliveryNote } from '../print/printDeliveryNote'
+import { printFreeItemVoucher } from '../print/printFreeItemVoucher'
 
 const STATUS_VARIANT = {
   APPROVAL_PROCESSING: 'approval',
@@ -43,6 +46,9 @@ function isRemarkRequired(from, to) {
   if (fi < 0 || ti < 0) return true
   return ti !== fi + 1
 }
+
+// Status filter options above the list (null = ALL), in lifecycle order.
+const STATUS_TABS = [null, 'APPROVAL_PROCESSING', 'APPROVED', 'NOT_APPROVED', 'IN_PRODUCTION', 'ON_DELIVERY', 'DELIVERED', 'CANCELED']
 
 const EDIT_STATUSES     = new Set(['APPROVAL_PROCESSING', 'NOT_APPROVED'])
 const PO_STATUSES       = new Set(['IN_PRODUCTION', 'ON_DELIVERY', 'DELIVERED'])
@@ -558,6 +564,45 @@ function OrderDetailModal({ order, token, onRefresh, onClose }) {
             </DetailSection>
           )}
 
+          {/* ④b Free Items */}
+          {o.freeItems && o.freeItems.length > 0 && (
+            <DetailSection title="Free Items">
+              <div className="border border-[#e5e5e5] rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[#f5f5f5] text-[#555] text-left">
+                      <th className="px-4 py-2.5 font-medium">Category</th>
+                      <th className="px-4 py-2.5 font-medium">Item</th>
+                      <th className="px-4 py-2.5 font-medium">Model</th>
+                      <th className="px-4 py-2.5 font-medium">Size</th>
+                      <th className="px-4 py-2.5 font-medium">Name</th>
+                      <th className="px-4 py-2.5 font-medium">Supplier</th>
+                      <th className="px-4 py-2.5 font-medium text-center">Qty</th>
+                      <th className="px-4 py-2.5 font-medium">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {o.freeItems.map((item, i) => {
+                      const rowCls = `border-t border-[#ebebeb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`
+                      return (
+                        <tr key={i} className={rowCls}>
+                          <td className="px-4 py-3 text-[#222] font-medium">{item.category}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.itemName}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.model}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.size || '—'}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.name || '—'}</td>
+                          <td className="px-4 py-3 text-[#666]">{item.supplierName}</td>
+                          <td className="px-4 py-3 text-center text-[#555]">{item.qty || 1}</td>
+                          <td className="px-4 py-3 font-semibold text-[#14213d]">Free</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </DetailSection>
+          )}
+
           {/* ⑤ Delivery Details */}
           {o.delivery && (
             <DetailSection title="Delivery Details">
@@ -821,17 +866,44 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
   const [offset,     setOffset]     = useState(0)
   const [total,      setTotal]      = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [statusFilter, setStatusFilter] = useState(null) // null = ALL
+  const [search,       setSearch]        = useState('')
+  const [searchTerm,   setSearchTerm]    = useState('')   // debounced value sent to backend
   const [exportOpen,     setExportOpen]     = useState(false)
   const [exportFilename, setExportFilename] = useState('approved-orders')
   const [exporting,      setExporting]      = useState(false)
   const [exportProjects,  setExportProjects]  = useState([])
   const [exportProjectId, setExportProjectId] = useState('')
+  const [projectFilter,  setProjectFilter]  = useState('') // '' = All Projects
+  const [freeVoucherOpen,        setFreeVoucherOpen]        = useState(false)
+  const [freeVoucherCtx,         setFreeVoucherCtx]         = useState({ companyId: null, companyName: '', branchId: null, branchName: '', projectId: null, projectName: '' })
+  const [freeVoucherSuppliers,   setFreeVoucherSuppliers]   = useState([])
+  const [freeVoucherSupplierId,  setFreeVoucherSupplierId]  = useState('')
+  const [freeVoucherGenerating,  setFreeVoucherGenerating]  = useState(false)
 
   useEffect(() => {
     if (!branchId) { setExportProjects([]); return }
     const token = localStorage.getItem('accessToken')
     getProjectsByBranch(branchId, token).then(res => setExportProjects(res.data?.projects ?? []))
+    setProjectFilter('')
   }, [branchId])
+
+  useEffect(() => {
+    if (!freeVoucherOpen) return
+    const token = localStorage.getItem('accessToken')
+    getSuppliers(token).then(res => setFreeVoucherSuppliers(res.data?.suppliers ?? []))
+  }, [freeVoucherOpen])
+
+  // Debounce the search box → searchTerm (the value sent to the backend); reset to page 1.
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchTerm(search.trim()); setOffset(0) }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  function handleSelectStatus(s) {
+    setStatusFilter(s)
+    setOffset(0)
+  }
 
   const backToList = () => { setEditOrder(null); setView('list'); setRefreshKey(k => k + 1) }
 
@@ -855,9 +927,13 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
           const n    = i + 1
           const item = allItems[i]
           const isSinger = i >= catCount
-          eqptCols[`EQPT0${n}_UNIT_PRICE`] = item ? (isSinger ? (item.price_per_item ?? '') : (item.item_value ?? '')) : ''
+          eqptCols[`EQPT0${n}_UNIT_PRICE`] = item
+            ? (isSinger
+                ? (Number(item.price_per_item || 0) * Number(item.qty || 1))
+                : (Number(item.item_value    || 0) * Number(item.qty || 1)))
+            : ''
           eqptCols[`EQPT0${n}_MODEL`]       = item?.model    || ''
-          eqptCols[`EQPT0${n}_MAKE`]        = ''
+          eqptCols[`EQPT0${n}_MAKE`]        = item ? (isSinger ? (item.make || '') : 'DFC') : ''
           eqptCols[`EQPT0${n}_TYPE`]        = item?.item_name || ''
           eqptCols[`EQPT0${n}_SINGERITEM`]  = ''
         }
@@ -973,18 +1049,45 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
     }
   }
 
+  async function handleFreeVoucherExport() {
+    if (!freeVoucherCtx.projectId || !freeVoucherSupplierId) return
+    setFreeVoucherGenerating(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await getFreeItemVoucher(
+        { projectId: freeVoucherCtx.projectId, supplierId: Number(freeVoucherSupplierId) },
+        token,
+      )
+      if (res.status === 200) {
+        printFreeItemVoucher(res.data)
+        setFreeVoucherOpen(false)
+      } else {
+        alert(res.message || 'Failed to generate voucher')
+      }
+    } finally {
+      setFreeVoucherGenerating(false)
+    }
+  }
+
   useEffect(() => {
     if (!branchId) { setOrders([]); setTotal(0); return }
     async function load() {
       const token = localStorage.getItem('accessToken')
-      const data = await getAllOrdersPaginated({ offset, limit, columnName: null, branchIds: [branchId] }, token)
+      const data = await getAllOrdersPaginated(
+        {
+          offset, limit, columnName: null, branchIds: [branchId],
+          status: statusFilter, search: searchTerm,
+          projectId: projectFilter ? Number(projectFilter) : null,
+        },
+        token,
+      )
       if (data.status === 200) {
         setOrders(data.data.orders)
         setTotal(Number(data.data.total))
       }
     }
     load()
-  }, [offset, limit, refreshKey, branchId])
+  }, [offset, limit, refreshKey, branchId, statusFilter, searchTerm, projectFilter])
 
   function handleLimitChange(newLimit) {
     setLimit(newLimit)
@@ -1080,6 +1183,49 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
         </div>
       )}
 
+      {freeVoucherOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setFreeVoucherOpen(false)} />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="bg-[#14213d] px-6 py-4 flex items-center justify-between">
+                <span className="text-white font-semibold text-sm">Payment Voucher</span>
+                <button onClick={() => setFreeVoucherOpen(false)} className="text-[#6b7a99] hover:text-white transition-colors cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-6 flex flex-col gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-[#555] mb-2">Project</p>
+                  <ProjectPicker value={freeVoucherCtx} onChange={setFreeVoucherCtx} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[#555] uppercase tracking-wider">Supplier <span className="text-red-400">*</span></label>
+                  <select
+                    className="border border-[#d8d8d8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#14213d] cursor-pointer"
+                    value={freeVoucherSupplierId}
+                    onChange={e => setFreeVoucherSupplierId(e.target.value)}
+                  >
+                    <option value="">Select supplier…</option>
+                    {freeVoucherSuppliers.map(s => (
+                      <option key={s.id} value={String(s.id)}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 px-6 py-4 border-t border-[#e5e5e5]">
+                <button onClick={() => setFreeVoucherOpen(false)} className="px-4 py-2 text-sm rounded-lg border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] transition-colors cursor-pointer">
+                  Cancel
+                </button>
+                <Button onClick={handleFreeVoucherExport} disabled={freeVoucherGenerating || !freeVoucherCtx.projectId || !freeVoucherSupplierId}>
+                  {freeVoucherGenerating ? 'Generating…' : <><Download size={14} className="mr-1.5" />Export</>}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {view === 'list' ? (
         <>
           <div className="flex items-center justify-between mb-6">
@@ -1089,31 +1235,90 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
                 <p className="text-sm text-[#fca311] font-medium mt-0.5">{companyLabel || branchName}</p>
               )}
             </div>
-            {branchId && (
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" onClick={() => setExportOpen(true)}>
-                  <Download size={14} className="mr-1.5" />
-                  Export
-                </Button>
-                <Button onClick={() => setView('form')}>
-                  <Plus size={15} className="mr-1.5" />
-                  Add New Order
-                </Button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => setFreeVoucherOpen(true)}>
+                <Receipt size={14} className="mr-1.5" />
+                Payment Voucher
+              </Button>
+              {branchId && (
+                <>
+                  <Button variant="secondary" onClick={() => setExportOpen(true)}>
+                    <Download size={14} className="mr-1.5" />
+                    Export
+                  </Button>
+                  <Button onClick={() => setView('form')}>
+                    <Plus size={15} className="mr-1.5" />
+                    Add New Order
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           {branchId ? (
-            <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
-              <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-              <PaginationBar
-                offset={offset}
-                limit={limit}
-                total={total}
-                onLimitChange={handleLimitChange}
-                onPrev={handlePrev}
-                onNext={handleNext}
-              />
-            </div>
+            <>
+              {/* Status + Project filters + Employee-No search */}
+              <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={statusFilter ?? ''}
+                    onChange={e => handleSelectStatus(e.target.value || null)}
+                    className="border border-[#14213d] rounded-lg px-3 py-2 text-sm text-[#222] focus:outline-none cursor-pointer"
+                  >
+                    <option value="">All Statuses</option>
+                    {STATUS_TABS.filter(s => s !== null).map(s => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={projectFilter}
+                    onChange={e => { setProjectFilter(e.target.value); setOffset(0) }}
+                    className="border border-[#14213d] rounded-lg px-3 py-2 text-sm text-[#222] focus:outline-none cursor-pointer"
+                  >
+                    <option value="">All Projects</option>
+                    {exportProjects.map(p => (
+                      <option key={p.id} value={String(p.id)}>{p.name}{p.ended ? ' (Ended)' : ''}</option>
+                    ))}
+                  </select>
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#aaa]" />
+                    <input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Search by Employee No…"
+                      className="pl-9 pr-8 py-2 w-64 rounded-lg border border-[#14213d] text-sm text-[#222] focus:outline-none focus:border-[#14213d]"
+                    />
+                    {search && (
+                      <button
+                        onClick={() => setSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#aaa] hover:text-[#14213d] cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-[#d8d8d8] overflow-hidden">
+                {orders.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <p className="text-sm text-[#999]">No orders match this filter.</p>
+                  </div>
+                ) : (
+                  <>
+                    <OrdersTable orders={orders} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
+                    <PaginationBar
+                      offset={offset}
+                      limit={limit}
+                      total={total}
+                      onLimitChange={handleLimitChange}
+                      onPrev={handlePrev}
+                      onNext={handleNext}
+                    />
+                  </>
+                )}
+              </div>
+            </>
           ) : (
             <div className="bg-white rounded-xl border border-[#d8d8d8] p-12 text-center">
               <p className="text-sm text-[#777]">Select a company and branch from the <span className="font-semibold text-[#14213d]">Orders</span> menu to view orders.</p>
