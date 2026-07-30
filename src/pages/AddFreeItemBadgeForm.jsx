@@ -1,6 +1,6 @@
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { deleteFreeItem, getFreeItemsByBadge, getSuppliers, saveFreeItem } from '../api/freeItemApi'
+import { deleteFreeItem, getFreeItemsByBadge, getSuppliers, saveFreeItem, saveSupplier } from '../api/freeItemApi'
 import Button from '../components/Button'
 import FormSection from '../components/FormSection'
 import ProjectPicker from '../components/ProjectPicker'
@@ -410,6 +410,7 @@ export default function AddFreeItemBadgeForm({ badge, initialContext = null, onB
           initialName={addSupplierPrefill}
           onClose={() => setAddSupplierPrefill(null)}
           onSaved={handleSupplierSaved}
+          onSave={dto => saveSupplier(dto, token)}
         />
       )}
 

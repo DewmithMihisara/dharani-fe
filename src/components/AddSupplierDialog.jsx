@@ -1,23 +1,21 @@
 import { useState } from 'react'
 import Button from './Button'
-import { saveSupplier } from '../api/freeItemApi'
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-white text-xs text-[#000] placeholder-[#bbb] focus:outline-none focus:border-[#14213d] transition-colors duration-100'
 
-export default function AddSupplierDialog({ initialName = '', onClose, onSaved }) {
+export default function AddSupplierDialog({ initialName = '', onClose, onSaved, onSave }) {
   const [name, setName] = useState(initialName)
   const [address, setAddress] = useState('')
   const [contactNo, setContactNo] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const token = localStorage.getItem('accessToken')
   const canSave = name.trim() && address.trim() && contactNo.trim() && !saving
 
   async function handleSave() {
     if (!canSave) return
     setSaving(true)
     try {
-      const res = await saveSupplier({ name: name.trim(), address: address.trim(), contactNo: contactNo.trim() }, token)
+      const res = await onSave({ name: name.trim(), address: address.trim(), contactNo: contactNo.trim() })
       if (res.status === 200) {
         onSaved({ id: res.data.supplierId, name: name.trim() })
       } else {

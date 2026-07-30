@@ -5,6 +5,7 @@ export function printFreeItemVoucher(data) {
 
   const MIN_ROWS = 3
   const rows = data.rows || []
+  const hasProject = !!(data.projectCode && String(data.projectCode).trim())
 
   const dash = v => (v != null && String(v).trim() !== '') ? v : '-'
   const itemRows = rows.map((r, idx) => `
@@ -85,9 +86,9 @@ table.items tfoot td{border-top:2px solid #000;border-bottom:1px solid #000;font
 
 <div class="hdr">
   <div class="hdr-co">DHARANI CEYLON FURNITURES (Pvt.) Ltd</div>
-  <div class="hdr-right">
-    <strong>Project&nbsp;:</strong>&nbsp;${data.projectCode || ''}
-  </div>
+  ${hasProject ? `<div class="hdr-right">
+    <strong>Project&nbsp;:</strong>&nbsp;${data.projectCode}
+  </div>` : ''}
 </div>
 
 <div class="doc-title">
@@ -102,7 +103,7 @@ table.items tfoot td{border-top:2px solid #000;border-bottom:1px solid #000;font
       <div class="cr"><span>Printed</span><span>:</span><span class="cv">${printedAt}</span></div>
     </div>
     <div class="info-col">
-      <div class="cr"><span>Project</span><span>:</span><span class="cv">${data.projectCode || ''}</span></div>
+      ${hasProject ? `<div class="cr"><span>Project</span><span>:</span><span class="cv">${data.projectCode}</span></div>` : ''}
       <div class="cr"><span>Contact No.</span><span>:</span><span class="cv">${data.supplierContactNo || ''}</span></div>
       <div class="pm">
         <span class="pm-lbl">Payment Method</span>

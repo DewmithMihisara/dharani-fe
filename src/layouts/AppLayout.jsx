@@ -6,6 +6,7 @@ import DashboardPage from '../pages/DashboardPage'
 import OrdersPage from '../pages/OrdersPage'
 import InventoryPage from '../pages/InventoryPage'
 import FreeItemsPage from '../pages/FreeItemsPage'
+import DisplayItemsPage from '../pages/DisplayItemsPage'
 import ReportsPage from '../pages/ReportsPage'
 import CompanyManagementPage from '../pages/CompanyManagementPage'
 import BranchManagementPage from '../pages/BranchManagementPage'
@@ -53,6 +54,8 @@ export default function AppLayout() {
         return <InventoryPage />
       case 'inventory-free':
         return <FreeItemsPage />
+      case 'inventory-display':
+        return <DisplayItemsPage />
       case 'reports':
         return <ReportsPage />
       case 'company':

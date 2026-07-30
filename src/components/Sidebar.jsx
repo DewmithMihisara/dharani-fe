@@ -258,12 +258,12 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
           </div>
         </div>
 
-        {/* Inventory — sub-menus: Selling Items / Free Items */}
+        {/* Inventory — sub-menus: Selling Items / Free Items / Display Items */}
         <div>
           <button
             onClick={toggleInventoryMgmt}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
-              ['inventory-selling', 'inventory-free'].includes(activeView)
+              ['inventory-selling', 'inventory-free', 'inventory-display'].includes(activeView)
                 ? 'bg-[#fca311] text-[#14213d]'
                 : 'text-white/60 hover:text-white hover:bg-white/10'
             }`}
@@ -285,6 +285,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
               {[
                 { key: 'inventory-selling', label: 'Selling Items' },
                 { key: 'inventory-free',    label: 'Free Items'    },
+                { key: 'inventory-display', label: 'Display Items' },
               ].map(sub => (
                 <button
                   key={sub.key}
