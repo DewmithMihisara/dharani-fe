@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut, ChevronDown, ChevronRight, Building2, Store } from 'lucide-react'
 import Logo from './Logo'
 import ConfirmDialog from './ConfirmDialog'
 import LicenseLockDialog from './LicenseLockDialog'
@@ -9,6 +9,7 @@ import { isReportLocked } from '../utils/licenseLock'
 
 const navItems = [
   { key: 'home',    icon: LayoutDashboard, label: 'Home'    },
+  { key: 'retail',  icon: Store,           label: 'Retail'  },
   { key: 'reports', icon: FileBarChart,    label: 'Reports' },
 ]
 
@@ -263,7 +264,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
           <button
             onClick={toggleInventoryMgmt}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
-              ['inventory-selling', 'inventory-free', 'inventory-display'].includes(activeView)
+              ['inventory-selling', 'inventory-free', 'inventory-display', 'inventory-retail'].includes(activeView)
                 ? 'bg-[#fca311] text-[#14213d]'
                 : 'text-white/60 hover:text-white hover:bg-white/10'
             }`}
@@ -286,6 +287,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
                 { key: 'inventory-selling', label: 'Selling Items' },
                 { key: 'inventory-free',    label: 'Free Items'    },
                 { key: 'inventory-display', label: 'Display Items' },
+                { key: 'inventory-retail',  label: 'Retail Items'  },
               ].map(sub => (
                 <button
                   key={sub.key}

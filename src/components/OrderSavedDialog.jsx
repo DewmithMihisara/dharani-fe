@@ -21,18 +21,29 @@ export default function OrderSavedDialog({ orderCode, onPrint, onClose,
           {message}
         </p>
         <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] transition-colors duration-100 cursor-pointer"
-          >
-            No
-          </button>
-          <button
-            onClick={onPrint}
-            className="px-4 py-2 text-sm rounded-lg bg-[#14213d] text-white hover:bg-[#fca311] hover:text-[#14213d] font-medium transition-colors duration-100 cursor-pointer"
-          >
-            Print
-          </button>
+          {onPrint ? (
+            <>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm rounded-lg border border-[#e5e5e5] text-[#555] hover:bg-[#f5f5f5] transition-colors duration-100 cursor-pointer"
+              >
+                No
+              </button>
+              <button
+                onClick={onPrint}
+                className="px-4 py-2 text-sm rounded-lg bg-[#14213d] text-white hover:bg-[#fca311] hover:text-[#14213d] font-medium transition-colors duration-100 cursor-pointer"
+              >
+                Print
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm rounded-lg bg-[#14213d] text-white hover:bg-[#fca311] hover:text-[#14213d] font-medium transition-colors duration-100 cursor-pointer"
+            >
+              OK
+            </button>
+          )}
         </div>
       </div>
     </div>
