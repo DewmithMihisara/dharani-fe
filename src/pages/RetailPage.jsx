@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Eye, Pencil, ClipboardList, Truck, Trash2, X, Search } from 'lucide-react'
+import { Plus, Eye, Pencil, ClipboardList, Truck, Receipt, Banknote, Trash2, X, Search } from 'lucide-react'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -8,6 +8,8 @@ import NewRetailOrderForm from './NewRetailOrderForm'
 import { getAllOrdersPaginated, getOrderById, deleteOrder, updateOrderStatus } from '../api/retailOrderApi'
 import { printRetailPurchaseOrder } from '../print/printRetailPurchaseOrder'
 import { printRetailDeliveryNote } from '../print/printRetailDeliveryNote'
+import { printRetailInvoice } from '../print/printRetailInvoice'
+import { printRetailBalanceDue } from '../print/printRetailBalanceDue'
 
 const STATUS_VARIANT = {
   APPROVED:      'approved',
@@ -49,6 +51,17 @@ const deleteBtn   = 'p-1.5 rounded-md transition-colors duration-100 text-[#999]
 
 function LKR(n) {
   return `LKR ${Number(n).toLocaleString('en-LK')}`
+}
+
+function computeOrderGrandTotal(o) {
+  const itemsTotal = (o.items || []).reduce((sum, item) => {
+    const disc = parseFloat(item.discountPct) || 0
+    const itemValue = Number(item.item_value)
+    const discountedPrice = disc > 0 ? Math.round(itemValue * (1 - disc / 100)) : itemValue
+    return sum + discountedPrice * (item.qty || 1)
+  }, 0)
+  const singerTotal = (o.singerItems || []).reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+  return itemsTotal + singerTotal
 }
 
 // ── Detail modal helpers ──────────────────────────────────────────────────────
@@ -112,6 +125,7 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [showPrintPoDialog, setShowPrintPoDialog] = useState(false)
   const [showPrintDeliveryDialog, setShowPrintDeliveryDialog] = useState(false)
+  const [showPrintBalanceDueDialog, setShowPrintBalanceDueDialog] = useState(false)
   const [deliveryVehicle, setDeliveryVehicle] = useState('')
   const [meterStart, setMeterStart] = useState('')
   const [driverName, setDriverName] = useState('')
@@ -161,8 +175,24 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
           orderCode={o.id}
           title="Status saved successfully!"
           message="Do you want to print the Delivery Note?"
-          onPrint={() => { setShowPrintDeliveryDialog(false); printRetailDeliveryNote(o.orderId, token) }}
-          onClose={() => setShowPrintDeliveryDialog(false)}
+          onPrint={() => {
+            setShowPrintDeliveryDialog(false)
+            printRetailDeliveryNote(o.orderId, token)
+            if (o.advancePayment) setShowPrintBalanceDueDialog(true)
+          }}
+          onClose={() => {
+            setShowPrintDeliveryDialog(false)
+            if (o.advancePayment) setShowPrintBalanceDueDialog(true)
+          }}
+        />
+      )}
+      {showPrintBalanceDueDialog && (
+        <OrderSavedDialog
+          orderCode={o.id}
+          title="Status saved successfully!"
+          message="Do you want to print the Balance Due notice?"
+          onPrint={() => { setShowPrintBalanceDueDialog(false); printRetailBalanceDue(o.orderId, token) }}
+          onClose={() => setShowPrintBalanceDueDialog(false)}
         />
       )}
       <DetailSection title="Order Status">
@@ -410,7 +440,18 @@ function RetailOrderDetailModal({ order, token, onRefresh, onClose }) {
             </DetailSection>
           )}
 
-          {/* ⑤ Delivery Details */}
+          {/* ⑤ Payment */}
+          {o.advancePayment && (
+            <DetailSection title="Payment">
+              <div className="grid grid-cols-3 gap-x-5 gap-y-2.5">
+                <Field label="Order Total"   value={LKR(computeOrderGrandTotal(o))} />
+                <Field label="Advance Paid"  value={LKR(o.advancePayment.advanceAmount)} />
+                <Field label="Balance Due"   value={LKR(Math.max(0, computeOrderGrandTotal(o) - Number(o.advancePayment.advanceAmount)))} />
+              </div>
+            </DetailSection>
+          )}
+
+          {/* ⑥ Delivery Details */}
           {o.delivery && (
             <DetailSection title="Delivery Details">
               <div className="grid grid-cols-4 gap-x-5 gap-y-2.5">
@@ -422,7 +463,7 @@ function RetailOrderDetailModal({ order, token, onRefresh, onClose }) {
             </DetailSection>
           )}
 
-          {/* ⑥ Order History */}
+          {/* ⑦ Order History */}
           {o.history && o.history.length > 0 && (
             <DetailSection title="Order History">
               <div className="flex flex-col">
@@ -524,6 +565,27 @@ function ActionButtons({ order, onView, onEdit, onDelete }) {
           })}
         >
           <Truck size={15} />
+        </button>
+        <button
+          className={iconBtn}
+          title="Print Invoice"
+          onClick={() => confirmPrint('Retail Invoice', 'Do you want to print the invoice?', () => {
+            const token = localStorage.getItem('accessToken')
+            printRetailInvoice(order.orderId, token)
+          })}
+        >
+          <Receipt size={15} />
+        </button>
+        <button
+          className={order.hasAdvancePayment ? iconBtn : disabledBtn}
+          title="Print Balance Due"
+          disabled={!order.hasAdvancePayment}
+          onClick={() => order.hasAdvancePayment && confirmPrint('Balance Due', 'Do you want to print the Balance Due notice?', () => {
+            const token = localStorage.getItem('accessToken')
+            printRetailBalanceDue(order.orderId, token)
+          })}
+        >
+          <Banknote size={15} />
         </button>
         <button
           className={order.status === 'DELIVERED' ? disabledBtn : deleteBtn}

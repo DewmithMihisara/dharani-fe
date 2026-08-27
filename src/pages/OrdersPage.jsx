@@ -922,6 +922,19 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
         const allItems    = [...catItems, ...singerItems]
         const catCount    = catItems.length
 
+        // Reduces cash price by any recorded partial payment (same as printSingerForm.js)
+        // and scales the monthly rental proportionally to that reduced price.
+        function effectiveCatalogueItem(it) {
+          const disc = parseFloat(it.discountPct) || 0
+          const basePrice = Number(it.item_value || 0)
+          const baseMonthly = Number(it[`month${it.duration_months}`] || 0)
+          const discountedPrice = disc > 0 ? Math.round(basePrice * (1 - disc / 100)) : basePrice
+          const paid = Number(it.paidAmount || 0)
+          const price = discountedPrice - paid
+          const monthly = basePrice > 0 ? Math.ceil(baseMonthly * price / basePrice) : baseMonthly
+          return { price, monthly }
+        }
+
         const eqptCols = {}
         for (let i = 0; i < 5; i++) {
           const n    = i + 1
@@ -930,7 +943,7 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
           eqptCols[`EQPT0${n}_UNIT_PRICE`] = item
             ? (isSinger
                 ? (Number(item.price_per_item || 0) * Number(item.qty || 1))
-                : (Number(item.item_value    || 0) * Number(item.qty || 1)))
+                : (effectiveCatalogueItem(item).price * Number(item.qty || 1)))
             : ''
           eqptCols[`EQPT0${n}_MODEL`]       = item?.model    || ''
           eqptCols[`EQPT0${n}_MAKE`]        = item ? (isSinger ? (item.make || '') : 'DFC') : ''
@@ -939,12 +952,12 @@ export default function OrdersPage({ branchId = null, branchName = '', companyLa
         }
 
         const cashPrice = [
-          ...catItems.map(it    => Number(it.item_value    || 0) * Number(it.qty || 1)),
+          ...catItems.map(it    => effectiveCatalogueItem(it).price * Number(it.qty || 1)),
           ...singerItems.map(it => Number(it.price_per_item || 0) * Number(it.qty || 1)),
         ].reduce((a, b) => a + b, 0)
 
         const rental = [
-          ...catItems.map(it    => Number(it[`month${it.duration_months}`] || 0) * Number(it.qty || 1)),
+          ...catItems.map(it    => effectiveCatalogueItem(it).monthly * Number(it.qty || 1)),
           ...singerItems.map(it => Number(it.monthly_per_item || 0)          * Number(it.qty || 1)),
         ].reduce((a, b) => a + b, 0)
 

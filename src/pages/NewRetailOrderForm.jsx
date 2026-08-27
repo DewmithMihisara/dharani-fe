@@ -8,6 +8,7 @@ import FormSection from '../components/FormSection'
 import Input from '../components/Input'
 import Select from '../components/Select'
 import OrderSavedDialog from '../components/OrderSavedDialog'
+import { printRetailInvoice } from '../print/printRetailInvoice'
 import { isValidNic } from '../utils/nic'
 import { capitalizeWords, buildFullNameWithInitials } from '../utils/text'
 
@@ -72,7 +73,19 @@ function apiToFormState(data) {
   }
 }
 
-function buildPayload(form, items, singerItems, id = null) {
+function computeItemsTotal(items) {
+  return items.reduce((sum, i) => {
+    const disc = parseFloat(i.discountPct) || 0
+    const v = disc > 0 ? Math.round(i.price * (1 - disc / 100)) : i.price
+    return sum + v * (parseInt(i.qty) || 1)
+  }, 0)
+}
+
+function computeSingerItemsTotal(singerItems) {
+  return singerItems.reduce((sum, i) => sum + (i.value || 0) * (i.qty || 1), 0)
+}
+
+function buildPayload(form, items, singerItems, advanceAmount, id = null) {
   const or = v => v || null
   return {
     id,
@@ -90,6 +103,8 @@ function buildPayload(form, items, singerItems, id = null) {
     permanentAddress2: or(form.permanentAddress2),
     permanentAddress3: or(form.permanentAddress3),
     permanentAddress4: form.permanentAddress4,
+
+    advanceAmount: advanceAmount != null ? advanceAmount : null,
 
     items: items.map(r => ({
       retailModelBadgeId: Number(r.retailModelBadgeId),
@@ -647,10 +662,24 @@ export default function NewRetailOrderForm({ onBack, initialData = null, orderId
       remark: i.remark || '',
     })) ?? []
   )
+  const [isAdvancePayment, setIsAdvancePayment] = useState(!!initialData?.advancePayment)
+  const [advanceAmount, setAdvanceAmount] = useState(
+    initialData?.advancePayment ? String(initialData.advancePayment.advanceAmount) : ''
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [errors, setErrors] = useState({})
   const [savedOrder, setSavedOrder] = useState(null)
+
+  const grandTotal = computeItemsTotal(items) + computeSingerItemsTotal(singerItems)
+  const advanceNum = parseFloat(advanceAmount) || 0
+  const advanceError = !isAdvancePayment || advanceAmount === ''
+    ? ''
+    : advanceNum <= 0
+      ? 'Advance amount must be greater than 0.'
+      : advanceNum > grandTotal
+        ? 'Advance amount cannot exceed the order total.'
+        : ''
 
   const f = (key, extra) => {
     const base = field(form, setForm, key, extra)
@@ -686,6 +715,10 @@ export default function NewRetailOrderForm({ onBack, initialData = null, orderId
   async function handleSubmit(e) {
     e.preventDefault()
     if (items.length === 0 && singerItems.length === 0) { setError('Please add at least one item.'); return }
+    if (isAdvancePayment && (advanceAmount === '' || advanceError)) {
+      setError(advanceError || 'Please enter the advance amount.')
+      return
+    }
     const validationErrors = validate(form)
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors)
@@ -697,7 +730,8 @@ export default function NewRetailOrderForm({ onBack, initialData = null, orderId
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const data = await apiPost('/retail-orders', buildPayload(form, items, singerItems, orderId), token)
+      const advancePayload = isAdvancePayment ? advanceNum : null
+      const data = await apiPost('/retail-orders', buildPayload(form, items, singerItems, advancePayload, orderId), token)
       if (data.status === 200) {
         if (orderId) {
           onBack()
@@ -721,7 +755,8 @@ export default function NewRetailOrderForm({ onBack, initialData = null, orderId
         <OrderSavedDialog
           orderCode={savedOrder.orderCode}
           title="Order saved successfully!"
-          message="Retail order placed."
+          message="Do you want to print the invoice?"
+          onPrint={() => printRetailInvoice(savedOrder.orderId, localStorage.getItem('accessToken'))}
           onClose={onBack}
         />
       )}
@@ -793,6 +828,49 @@ export default function NewRetailOrderForm({ onBack, initialData = null, orderId
 
         {/* ── Section 3: Singer Items ── */}
         <RetailSingerItemsSection singerItems={singerItems} setSingerItems={setSingerItems} />
+
+        {/* ── Section 4: Payment ── */}
+        <FormSection number="4" title="Payment">
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-xs text-[#222] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isAdvancePayment}
+                onChange={e => { setIsAdvancePayment(e.target.checked); if (!e.target.checked) setAdvanceAmount('') }}
+                className="w-4 h-4 accent-[#14213d] cursor-pointer"
+              />
+              Pay in Advance?
+            </label>
+
+            {isAdvancePayment && (
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-[#222]">
+                    Advance Amount (LKR)<span className="text-[#fca311] ml-0.5">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={advanceAmount}
+                    onChange={e => setAdvanceAmount(e.target.value)}
+                    placeholder="0.00"
+                    className={inputCls}
+                  />
+                  {advanceError && <p className="text-[11px] text-red-500 mt-0.5">{advanceError}</p>}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-[#222]">Order Total</span>
+                  <span className="text-sm font-semibold text-[#14213d] py-1.5">{LKR(grandTotal)}</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-[#222]">Remaining Balance</span>
+                  <span className="text-sm font-bold text-[#fca311] py-1.5">
+                    {LKR(Math.max(0, grandTotal - advanceNum))}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </FormSection>
 
         {/* ── Actions ── */}
         <div className="bg-white border border-[#d8d8d8] rounded-xl px-6 py-4 flex items-center justify-between">
