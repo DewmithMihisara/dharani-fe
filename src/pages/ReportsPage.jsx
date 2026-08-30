@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs'
 import Button from '../components/Button'
 import Combobox from '../components/Combobox'
 import { getBranches, getProjectsByBranch, getReportData } from '../api/orderApi'
+import { getRetailReportData } from '../api/retailOrderApi'
 import { printReport } from '../print/printReport'
 
 const STATUS_OPTIONS = [
@@ -15,7 +16,17 @@ const STATUS_OPTIONS = [
   { value: 'DELIVERED',           label: 'Delivered'           },
   { value: 'CANCELED',            label: 'Cancelled'           },
 ]
-const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s.label]))
+// Retail orders never enter the financing-approval stages.
+const RETAIL_STATUS_OPTIONS = [
+  { value: 'APPROVED',      label: 'Approved'      },
+  { value: 'IN_PRODUCTION', label: 'In Production' },
+  { value: 'ON_DELIVERY',   label: 'On Delivery'   },
+  { value: 'DELIVERED',     label: 'Delivered'     },
+  { value: 'CANCELED',      label: 'Cancelled'     },
+]
+const STATUS_LABELS = Object.fromEntries(
+  [...STATUS_OPTIONS, ...RETAIL_STATUS_OPTIONS].map(s => [s.value, s.label])
+)
 
 // Groups consecutive rows that belong to the same customer (same order) so Emp No / Emp Name / #
 // can be rendered/merged once per group instead of once per item row.
@@ -42,8 +53,11 @@ const inputCls = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-white t
 const disabledSelectCls = 'w-full px-3 py-2 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-xs text-[#bbb] cursor-not-allowed'
 
 export default function ReportsPage() {
+  const [orderSource, setOrderSource] = useState('PROJECT') // 'PROJECT' | 'RETAIL'
   const [reportType, setReportType] = useState('detail') // 'detail' | 'summary'
   const [priceBasis, setPriceBasis] = useState('SELLING') // 'SELLING' | 'TRANSFER'
+
+  const isRetail = orderSource === 'RETAIL'
 
   const [branches, setBranches]               = useState([])
   const [branchProjects, setBranchProjects]   = useState([])
@@ -71,18 +85,20 @@ export default function ReportsPage() {
     )
   }, [selectedBranchId])
 
-  const canGenerate = Boolean(projectId) && Boolean(status) && !generating
+  const canGenerate = (isRetail || Boolean(projectId)) && Boolean(status) && !generating
 
-  // Fetch + normalize the report data. Returns { rows, meta, totalSales } or null on error.
+  // Fetch + normalize the report data. Returns { rows, metaPairs, idLabels, totalSales } or null on error.
   async function fetchReport() {
     const token = localStorage.getItem('accessToken')
-    const res = await getReportData({
-      projectId: Number(projectId),
+    const filters = {
       status,
       startDate: startDate || null,
       endDate:   endDate   || null,
       useTransferPrice: priceBasis === 'TRANSFER',
-    }, token)
+    }
+    const res = isRetail
+      ? await getRetailReportData(filters, token)
+      : await getReportData({ ...filters, projectId: Number(projectId) }, token)
 
     if (res.status !== 200) {
       setError(res.message || 'Failed to generate report.')
@@ -90,15 +106,21 @@ export default function ReportsPage() {
     }
 
     const rows = annotateCustomerGroups(res.data.rows || [])
-    const meta = {
-      company:   res.data.company   || companyName,
-      project:   res.data.project   || '',
-      status:    STATUS_LABELS[res.data.status] || res.data.status || '',
-      startDate: res.data.startDate || 'All',
-      endDate:   res.data.endDate   || 'All',
-    }
+    const statusLabel = STATUS_LABELS[res.data.status] || res.data.status || ''
+    const startLabel = res.data.startDate || 'All'
+    const endLabel = res.data.endDate || 'All'
+    const metaPairs = isRetail
+      ? [['Status', statusLabel], ['Start Date', startLabel], ['End Date', endLabel]]
+      : [
+          ['Company',    res.data.company || companyName],
+          ['Project',    res.data.project || ''],
+          ['Status',     statusLabel],
+          ['Start Date', startLabel],
+          ['End Date',   endLabel],
+        ]
+    const idLabels = isRetail ? ['NIC', 'Customer Name'] : ['Emp No', 'Emp Name']
     const totalSales = rows.reduce((sum, r) => sum + Number(r.totalPrice || 0), 0)
-    return { rows, meta, totalSales }
+    return { rows, metaPairs, idLabels, totalSales }
   }
 
   async function handleGenerate(format) {
@@ -109,9 +131,9 @@ export default function ReportsPage() {
       if (!data) return
       const priceLabel = priceBasis === 'TRANSFER' ? 'Transfer Price' : 'Selling Price'
       if (format === 'print') {
-        printReport(reportType, data.rows, data.meta, data.totalSales, priceLabel)
+        printReport(reportType, data.rows, data.metaPairs, data.totalSales, priceLabel, data.idLabels)
       } else {
-        await buildAndSaveWorkbook(reportType, data.rows, data.meta, data.totalSales, priceLabel)
+        await buildAndSaveWorkbook(reportType, data.rows, data.metaPairs, data.totalSales, priceLabel, data.idLabels, isRetail)
       }
     } catch (e) {
       setError(e.message || 'Failed to generate report.')
@@ -123,6 +145,24 @@ export default function ReportsPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-semibold text-[#14213d] mb-6">Reports</h1>
+
+      {/* Order source selector */}
+      <div className="grid grid-cols-2 gap-3 max-w-2xl mb-6">
+        <ReportTypeCard
+          active={orderSource === 'PROJECT'}
+          icon={FileSpreadsheet}
+          title="Project Orders"
+          desc="Financing orders under a company / branch / project."
+          onClick={() => { setOrderSource('PROJECT'); setStatus('') }}
+        />
+        <ReportTypeCard
+          active={orderSource === 'RETAIL'}
+          icon={FileBarChart}
+          title="Retail Orders"
+          desc="Walk-in cash sales — no project, filtered by status and date."
+          onClick={() => { setOrderSource('RETAIL'); setStatus('') }}
+        />
+      </div>
 
       {/* Report type selector */}
       <div className="grid grid-cols-2 gap-3 max-w-2xl mb-6">
@@ -163,35 +203,39 @@ export default function ReportsPage() {
       {/* Filter form */}
       <div className="bg-white rounded-xl shadow-sm border border-[#e5e5e5] p-6 max-w-2xl flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[#222]">Company<span className="text-[#fca311] ml-0.5">*</span></label>
-            <Combobox
-              value={companyName}
-              options={branches.map(b => ({ id: b.id, label: b.name }))}
-              onChange={(label, id) => {
-                setCompanyName(label)
-                setProjectId('')
-                setSelectedBranchId(id)
-              }}
-              placeholder="Search company…"
-              className={inputCls}
-            />
-          </div>
+          {!isRetail && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[#222]">Company<span className="text-[#fca311] ml-0.5">*</span></label>
+              <Combobox
+                value={companyName}
+                options={branches.map(b => ({ id: b.id, label: b.name }))}
+                onChange={(label, id) => {
+                  setCompanyName(label)
+                  setProjectId('')
+                  setSelectedBranchId(id)
+                }}
+                placeholder="Search company…"
+                className={inputCls}
+              />
+            </div>
+          )}
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[#222]">Project<span className="text-[#fca311] ml-0.5">*</span></label>
-            <select
-              value={projectId}
-              onChange={e => setProjectId(e.target.value)}
-              disabled={!companyName}
-              className={!companyName ? disabledSelectCls : `${inputCls} cursor-pointer`}
-            >
-              <option value="">Select project…</option>
-              {branchProjects.map(p => (
-                <option key={p.id} value={String(p.id)}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          {!isRetail && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[#222]">Project<span className="text-[#fca311] ml-0.5">*</span></label>
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                disabled={!companyName}
+                className={!companyName ? disabledSelectCls : `${inputCls} cursor-pointer`}
+              >
+                <option value="">Select project…</option>
+                {branchProjects.map(p => (
+                  <option key={p.id} value={String(p.id)}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[#222]">Status<span className="text-[#fca311] ml-0.5">*</span></label>
@@ -201,7 +245,7 @@ export default function ReportsPage() {
               className={`${inputCls} cursor-pointer`}
             >
               <option value="">Select status…</option>
-              {STATUS_OPTIONS.map(s => (
+              {(isRetail ? RETAIL_STATUS_OPTIONS : STATUS_OPTIONS).map(s => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
@@ -261,27 +305,20 @@ function ReportTypeCard({ active, icon: Icon, title, desc, onClick }) {
 
 const MONEY_FMT = '#,##0.00'
 
-async function buildAndSaveWorkbook(reportType, rows, meta, totalSales, priceLabel = 'Selling Price') {
+async function buildAndSaveWorkbook(reportType, rows, metaPairs, totalSales, priceLabel = 'Selling Price', idLabels = ['Emp No', 'Emp Name'], isRetail = false) {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(reportType === 'detail' ? 'Detail Report' : 'Summary Report')
   ws.columns = [{ width: 16 }, { width: 28 }, { width: 22 }, { width: 22 }, { width: 16 }, { width: 16 }]
 
   // Header block
-  const headerPairs = [
-    ['Company',    meta.company],
-    ['Project',    meta.project],
-    ['Status',     meta.status],
-    ['Start Date', meta.startDate],
-    ['End Date',   meta.endDate],
-  ]
-  headerPairs.forEach(([k, v]) => {
+  ;(metaPairs || []).forEach(([k, v]) => {
     const row = ws.addRow([k, v])
     row.getCell(1).font = { bold: true }
   })
   ws.addRow([]) // spacer
 
   if (reportType === 'detail') {
-    const headerRow = ws.addRow(['Emp No', 'Emp Name', 'Item', 'Model', priceLabel, 'Total Price'])
+    const headerRow = ws.addRow([idLabels[0], idLabels[1], 'Item', 'Model', priceLabel, 'Total Price'])
     headerRow.eachCell(cell => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }
       cell.font = { bold: true }
@@ -319,7 +356,7 @@ async function buildAndSaveWorkbook(reportType, rows, meta, totalSales, priceLab
 
   const wbBuffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([wbBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const fname = (reportType === 'detail' ? 'detail-report' : 'summary-report') + '.xlsx'
+  const fname = (isRetail ? 'retail-' : '') + (reportType === 'detail' ? 'detail-report' : 'summary-report') + '.xlsx'
 
   if (typeof window.showSaveFilePicker === 'function') {
     const fh = await window.showSaveFilePicker({

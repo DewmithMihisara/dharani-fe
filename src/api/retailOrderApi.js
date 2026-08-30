@@ -19,3 +19,7 @@ export async function updateOrderStatus(orderId, body, token = null) {
 export async function printPo(orderId, token = null) {
   return apiPatch(`/retail-orders/${orderId}/print-po`, {}, token)
 }
+
+export async function getRetailReportData(filters, token = null) {
+  return apiPost('/retail-orders/report', filters, token)
+}

@@ -1,19 +1,13 @@
 // A4 portrait print for the Reports tab. Receives already-fetched data (no re-fetch)
 // — the report endpoint is a POST with filters and ReportsPage already holds the data.
 
-export function printReport(reportType, rows, meta, totalSales, priceLabel = 'Selling Price') {
+export function printReport(reportType, rows, metaPairs, totalSales, priceLabel = 'Selling Price', idLabels = ['Emp No', 'Emp Name']) {
   const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
   const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
   const title = reportType === 'detail' ? 'Detail Report' : 'Summary Report'
 
-  const metaRows = [
-    ['Company',    meta.company],
-    ['Project',    meta.project],
-    ['Status',     meta.status],
-    ['Start Date', meta.startDate],
-    ['End Date',   meta.endDate],
-  ].map(([k, v]) =>
+  const metaRows = (metaPairs || []).map(([k, v]) =>
     `<div class="mr"><span class="ml">${esc(k)}</span><span>:</span><span class="mv">${esc(v)}</span></div>`
   ).join('')
 
@@ -37,8 +31,8 @@ export function printReport(reportType, rows, meta, totalSales, priceLabel = 'Se
       <thead>
         <tr>
           <th style="width:32px">#</th>
-          <th style="width:90px">Emp No</th>
-          <th>Emp Name</th>
+          <th style="width:90px">${esc(idLabels[0])}</th>
+          <th>${esc(idLabels[1])}</th>
           <th>Item</th>
           <th>Model</th>
           <th style="width:100px">${esc(priceLabel)}</th>
