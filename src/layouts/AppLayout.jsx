@@ -9,6 +9,7 @@ import FreeItemsPage from '../pages/FreeItemsPage'
 import DisplayItemsPage from '../pages/DisplayItemsPage'
 import RetailItemsPage from '../pages/RetailItemsPage'
 import RetailPage from '../pages/RetailPage'
+import DeliveryPage from '../pages/DeliveryPage'
 import ReportsPage from '../pages/ReportsPage'
 import CompanyManagementPage from '../pages/CompanyManagementPage'
 import BranchManagementPage from '../pages/BranchManagementPage'
@@ -62,6 +63,8 @@ export default function AppLayout() {
         return <RetailItemsPage />
       case 'retail':
         return <RetailPage />
+      case 'delivery':
+        return <DeliveryPage />
       case 'reports':
         return <ReportsPage />
       case 'company':

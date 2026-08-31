@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut, ChevronDown, ChevronRight, Building2, Store } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Package, FileBarChart, LogOut, ChevronDown, ChevronRight, Building2, Store, Truck } from 'lucide-react'
 import Logo from './Logo'
 import ConfirmDialog from './ConfirmDialog'
 import LicenseLockDialog from './LicenseLockDialog'
@@ -8,9 +8,10 @@ import { getCompanies, getBranchesByCompany } from '../api/orderApi'
 import { isReportLocked } from '../utils/licenseLock'
 
 const navItems = [
-  { key: 'home',    icon: LayoutDashboard, label: 'Home'    },
-  { key: 'retail',  icon: Store,           label: 'Retail'  },
-  { key: 'reports', icon: FileBarChart,    label: 'Reports' },
+  { key: 'home',     icon: LayoutDashboard, label: 'Home'     },
+  { key: 'retail',   icon: Store,           label: 'Retail'              },
+  { key: 'delivery', icon: Truck,           label: 'Delivery Management' },
+  { key: 'reports',  icon: FileBarChart,    label: 'Reports'             },
 ]
 
 function NavItem({ navKey, icon: Icon, label, isActive, onNavigate }) {
@@ -39,6 +40,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
   const [companies, setCompanies]                 = useState(null)   // null = not loaded yet
   const [branchesByCompany, setBranchesByCompany] = useState({})     // { [companyId]: OptionDto[] | undefined }
   const [hoverCompanyId, setHoverCompanyId]       = useState(null)
+  const [flyoutPos, setFlyoutPos]                 = useState({ top: 0, left: 0 })
 
   const [companyMgmtOpen, setCompanyMgmtOpen]     = useState(false)
   const [inventoryMgmtOpen, setInventoryMgmtOpen] = useState(false)
@@ -93,8 +95,12 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
     }
   }
 
-  function handleCompanyHover(companyId) {
+  function handleCompanyHover(companyId, e) {
     setHoverCompanyId(companyId)
+    if (e?.currentTarget) {
+      const r = e.currentTarget.getBoundingClientRect()
+      setFlyoutPos({ top: r.top, left: r.right })
+    }
     if (branchesByCompany[companyId] === undefined) {
       getBranchesByCompany(companyId, token).then(res =>
         setBranchesByCompany(prev => ({ ...prev, [companyId]: res.data?.branches ?? [] }))
@@ -123,12 +129,15 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
   }
 
   return (
-    <aside className="w-60 h-full bg-[#14213d] flex flex-col px-4 py-6 shrink-0">
-      <div className="px-2 mb-6">
+    <aside className="w-60 h-full bg-[#14213d] flex flex-col px-4 py-6 shrink-0 overflow-hidden">
+      <div className="px-2 mb-6 shrink-0">
         <Logo dark size="sm" />
       </div>
 
-      <nav className="flex flex-col gap-1">
+      <nav
+        className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto sidebar-scroll pr-1"
+        onScroll={() => setHoverCompanyId(null)}
+      >
         <NavItem
           navKey="home"
           icon={LayoutDashboard}
@@ -159,7 +168,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
           <div
             className={`flex flex-col gap-0.5 pl-3 transition-all duration-300 ease-in-out ${
               ordersOpen ? 'max-h-80 opacity-100 mt-1' : 'max-h-0 opacity-0 mt-0'
-            } ${ordersExpanded ? 'overflow-visible' : 'overflow-hidden'}`}
+            } ${ordersExpanded ? 'overflow-y-auto sidebar-scroll' : 'overflow-hidden'}`}
             onTransitionEnd={e => { if (e.propertyName === 'max-height' && ordersOpen) setOrdersExpanded(true) }}
             onMouseLeave={() => setHoverCompanyId(null)}
           >
@@ -175,7 +184,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
                   <div
                     key={company.id}
                     className="relative"
-                    onMouseEnter={() => handleCompanyHover(company.id)}
+                    onMouseEnter={e => handleCompanyHover(company.id, e)}
                   >
                     <button
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors duration-150 cursor-pointer ${
@@ -189,8 +198,8 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
                     </button>
 
                     {hoverCompanyId === company.id && (
-                      <div className="absolute left-full top-0 z-50 pl-1">
-                        <div className="min-w-44 bg-[#1c2c4d] border border-white/10 rounded-lg shadow-xl py-1">
+                      <div className="fixed z-50 pl-1" style={{ top: flyoutPos.top, left: flyoutPos.left }}>
+                        <div className="min-w-44 max-h-72 overflow-y-auto sidebar-scroll bg-[#1c2c4d] border border-white/10 rounded-lg shadow-xl py-1">
                           {branches === undefined && (
                             <div className="px-3 py-2 text-xs text-white/40">Loading…</div>
                           )}
@@ -316,7 +325,7 @@ export default function Sidebar({ activeView, onNavigate, navVersion = 0 }) {
         ))}
       </nav>
 
-      <div className="mt-auto">
+      <div className="mt-2 shrink-0">
         <button
           onClick={() => setShowLogout(true)}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer text-white/60 hover:text-red-400 hover:bg-red-400/10"

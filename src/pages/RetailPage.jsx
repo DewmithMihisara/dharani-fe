@@ -30,7 +30,7 @@ const STATUS_LABELS = {
 // Retail order status transition rules (mirrored on the backend RetailOrderServiceImpl).
 // No APPROVAL_PROCESSING / NOT_APPROVED — retail orders are created already APPROVED.
 const MAIN_PIPELINE    = ['APPROVED', 'IN_PRODUCTION', 'ON_DELIVERY', 'DELIVERED']
-const CANCELLABLE_FROM = new Set(['APPROVED', 'IN_PRODUCTION', 'ON_DELIVERY'])
+const CANCELLABLE_FROM = new Set(['APPROVED', 'IN_PRODUCTION'])
 const TERMINAL_STATUSES = new Set(['DELIVERED', 'CANCELED'])
 
 function isRemarkRequired(from, to) {
@@ -131,8 +131,11 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
   const [driverName, setDriverName] = useState('')
   const [meterEnd, setMeterEnd] = useState('')
 
+  const [confirmOnDelivery, setConfirmOnDelivery] = useState(false)
+
   const options = ALL_STATUS_OPTIONS.filter(opt =>
     opt.value !== o.status &&
+    opt.value !== 'DELIVERED' &&
     (opt.value !== 'CANCELED' || CANCELLABLE_FROM.has(o.status))
   )
 
@@ -142,8 +145,13 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
 
   const remarkRequired = !!selected && isRemarkRequired(o.status, selected)
 
-  async function handleSave() {
+  function handleSave() {
     if (!selected || deliveryFieldsMissing || (remarkRequired && !statusRemark.trim())) return
+    if (selected === 'ON_DELIVERY') { setConfirmOnDelivery(true); return }
+    doSave()
+  }
+
+  async function doSave() {
     setSaving(true)
     const body = { status: selected, remark: statusRemark }
     if (selected === 'DELIVERED') {
@@ -161,6 +169,13 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
 
   return (
     <>
+      {confirmOnDelivery && (
+        <ConfirmDialog
+          message="Once this order is set to On Delivery it can no longer be cancelled. Continue?"
+          onConfirm={() => { setConfirmOnDelivery(false); doSave() }}
+          onCancel={() => setConfirmOnDelivery(false)}
+        />
+      )}
       {showPrintPoDialog && (
         <OrderSavedDialog
           orderCode={o.id}
@@ -197,7 +212,9 @@ function RetailOrderStatusSection({ o, token, onSaved }) {
       )}
       <DetailSection title="Order Status">
         <div className="flex flex-col gap-4">
-          {TERMINAL_STATUSES.has(o.status) ? (
+          {o.onDeliveryTrip ? (
+            <p className="text-sm text-[#aaa] italic">Managed by delivery trip {o.deliveryTripCode}. Change its status from Delivery Management.</p>
+          ) : TERMINAL_STATUSES.has(o.status) ? (
             <p className="text-sm text-[#aaa] italic">Order is {STATUS_LABELS[o.status]?.toLowerCase()}. No further status changes allowed.</p>
           ) : (<>
           <div className="flex flex-col gap-2">
